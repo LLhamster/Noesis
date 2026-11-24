@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 
-import com.example.httpreading.api.BusinessException;
+import com.example.httpreading.common.web.BusinessException;
 
 class DocumentStorageServiceTest {
 

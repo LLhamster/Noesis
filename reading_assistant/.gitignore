@@ -67,6 +67,9 @@ cookies.txt
 # 如果你不想上传这些个人记录
 resume_text.txt
 memory/
+!/src/main/java/com/example/httpreading/modules/memory/
+!/src/test/java/com/example/httpreading/modules/memory/
+!/src/main/resources/prompts/memory/
 
 # =========================
 # OS

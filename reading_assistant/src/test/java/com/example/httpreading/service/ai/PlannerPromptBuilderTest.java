@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.mcp.ExternalMcpClientService;
+import com.example.httpreading.modules.mcp.ExternalMcpClientService;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
 

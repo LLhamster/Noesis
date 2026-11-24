@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.evolution.PromptOverride;
-import com.example.httpreading.mcp.ExternalMcpClientService;
+import com.example.httpreading.modules.evolution.PromptOverride;
+import com.example.httpreading.modules.mcp.ExternalMcpClientService;
 import com.example.httpreading.service.ModelClient;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

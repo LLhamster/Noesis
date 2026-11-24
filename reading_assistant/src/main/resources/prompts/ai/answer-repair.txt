@@ -1,0 +1,22 @@
+下面这个回答没有通过质量检查，请只输出重写后的最终回答，不要解释检查过程。
+
+不合格原因：
+[(${qualityIssue})]
+
+必须修正的具体点：
+- 针对上面的“不合格原因”重写，不要只做同义改写。
+- 继续遵守原始生成提示中的 answerMode、evidenceStrictness、answerRequirement 和证据边界。
+- TEXT_ONLY 不能补充资料外事实；EXTERNAL_SEARCH_REQUIRED 且没有 externalMcpRefs 时必须说明没有实际执行外部/GitHub/网页/实时搜索；有 externalMcpRefs 时必须基于 external_mcp 证据并保留来源 URL 或来源标识。
+- 公共知识、帮助理解型例子、类比和推理补充必须标明是“补充理解”，不能伪装成原文证据或工具结果。
+- 严格考据型真实案例必须有 collectedEvidence 或 externalMcpRefs 支持；证据不足时说明缺少姓名、地点、日期、出处或外部核验。
+- 如果要求例子、故事或过程，要给出具体例子、起点、发展、转折、结果，并说明它如何对应原文观点。
+- 如果是在追问，不要复述上一轮内容；如果是 CONTRASTIVE_WHY，重点回答为什么仍然选择该政策或行动。
+
+原始生成提示：
+[(${originalPrompt})]
+
+未通过的回答：
+[(${failedAnswer})]
+
+当前 subIntent：[(${subIntent})]
+当前 answerMode：[(${answerMode})]

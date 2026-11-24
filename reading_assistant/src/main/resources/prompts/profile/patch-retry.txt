@@ -1,0 +1,51 @@
+上一次用户画像更新模型输出不合法，不能写入数据库。请只输出修正后的纯 JSON，不要 Markdown，不要解释。
+
+解析/校验错误：
+[(${parseError})]
+
+非法输出：
+[(${invalidOutput})]
+
+必须遵守：
+- 顶层只允许 stylePatch、readingPatches、knowledgePatches、newEvidence、summary。
+- 禁止 JSON Patch 格式，不能出现 op/path/value。
+- readingPatches 只能是画像字段对象数组，禁止 bookId/chapterIndex/question/answer/readingProgress/currentChapterIndex。
+- knowledgePatches 必须是对象数组；domain 只能用固定 bookCategory；knowledgeType 只能是 concept/person/event/theory/method/case/other；level 只能是 unknown/exposed/learning/basic_understood/well_understood。
+- newEvidence 必须是对象数组，不能是字符串数组。
+- bookCategory/domain 只能是：社会学、技术、历史、文学、哲学、心理学、英语、职业成长、经济学、其他。
+- 回答方式偏好必须进入 stylePatch/newEvidence(evidenceDomain=style)，不要写入 readingPatches。
+- readingPatches 只描述知识理解状态，不描述“喜欢完整案例/背景解释/直接进入故事/回扣原文观点”。
+- 如果只有解释偏好证据，readingPatches 和 knowledgePatches 都输出 []。
+- relatedBookId/relatedBookTitle/relatedChapterIndex 只能来自记忆 metadata 的明确来源；没有明确来源时输出 null 或省略。
+
+目标 schema：
+{
+  "stylePatch": {
+    "explanationStyle": "通俗、具体、案例化、补充背景",
+    "preferredDepth": "medium_to_detailed",
+    "prefersExamples": true,
+    "prefersStorytelling": true,
+    "prefersStepByStep": true,
+    "avoidance": ["教科书式回答", "空泛总结", "模板化开头"],
+    "summary": "用户偏好完整案例、背景解释、直接进入故事，并希望最后回扣原文观点。",
+    "confidenceDelta": 0.1
+  },
+  "readingPatches": [],
+  "knowledgePatches": [],
+  "newEvidence": [
+    {
+      "evidenceDomain": "style",
+      "evidenceType": "explanation_preference",
+      "bookCategory": null,
+      "content": "用户要求完整案例和背景解释。",
+      "importance": 0.82,
+      "relatedBookId": null,
+      "relatedBookTitle": null,
+      "relatedChapterIndex": null
+    }
+  ],
+  "summary": "..."
+}
+
+原始任务提示：
+[(${originalPrompt})]

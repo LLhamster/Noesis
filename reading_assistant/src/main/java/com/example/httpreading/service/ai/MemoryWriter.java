@@ -1,7 +1,7 @@
 package com.example.httpreading.service.ai;
 
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.service.AgentMemoryService;
+import com.example.httpreading.modules.memory.AgentMemoryService;
 import org.springframework.stereotype.Service;
 
 @Service

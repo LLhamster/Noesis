@@ -24,7 +24,7 @@ import com.example.httpreading.domain.entity.Books;
 import com.example.httpreading.dto.BookCreateRequest;
 import com.example.httpreading.dto.BookImportIndexResponse;
 import com.example.httpreading.dto.BookImportResponse;
-import com.example.httpreading.mq.BookIndexProducer;
+import com.example.httpreading.common.messaging.BookIndexProducer;
 import com.example.httpreading.repository.BooksRepository;
 import com.example.httpreading.repository.ChaptersRepository;
 
@@ -69,7 +69,7 @@ class BooksAdminServiceTest {
         when(booksRepository.findAll()).thenReturn(List.of(legacy, missing));
         when(documentStorageService.sha256("books/11/source/original.epub")).thenReturn("hash11");
         when(documentStorageService.sha256("books/12/source/original.epub"))
-            .thenThrow(com.example.httpreading.api.ErrorCode.RESOURCE_NOT_FOUND.toException("不存在"));
+            .thenThrow(com.example.httpreading.common.web.ErrorCode.RESOURCE_NOT_FOUND.toException("不存在"));
         when(booksRepository.findBySourceHash("hash11")).thenReturn(Optional.empty());
 
         BookImportIndexResponse response = service().refreshImportIndex();
@@ -161,7 +161,7 @@ class BooksAdminServiceTest {
         when(booksRepository.findBySourceHash("same-hash")).thenReturn(Optional.of(other));
 
         assertThatThrownBy(() -> service().replaceBookFile(51L, new BookCreateRequest(), file))
-            .isInstanceOf(com.example.httpreading.api.BusinessException.class)
+            .isInstanceOf(com.example.httpreading.common.web.BusinessException.class)
             .hasMessageContaining("bookId=52");
 
         verify(documentStorageService, never()).stageReplacementSourceFile(anyLong(), any());

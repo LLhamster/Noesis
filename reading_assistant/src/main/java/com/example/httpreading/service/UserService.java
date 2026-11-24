@@ -1,6 +1,6 @@
 package com.example.httpreading.service;
 
-import com.example.httpreading.api.ErrorCode;
+import com.example.httpreading.common.web.ErrorCode;
 import com.example.httpreading.repository.UserRepository;
 
 import java.time.LocalDateTime;

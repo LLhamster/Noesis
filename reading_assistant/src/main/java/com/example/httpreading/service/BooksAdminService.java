@@ -2,14 +2,14 @@ package com.example.httpreading.service;
 
 import com.example.httpreading.domain.entity.Books;
 import com.example.httpreading.domain.entity.Chapters;
-import com.example.httpreading.api.BusinessException;
-import com.example.httpreading.api.ErrorCode;
+import com.example.httpreading.common.web.BusinessException;
+import com.example.httpreading.common.web.ErrorCode;
 import com.example.httpreading.dto.BookCreateRequest;
 import com.example.httpreading.dto.BookImportIndexResponse;
 import com.example.httpreading.dto.BookImportResponse;
 import com.example.httpreading.service.DocumentParseService.ParsedBook;
 import com.example.httpreading.service.DocumentParseService.ParsedChapter;
-import com.example.httpreading.mq.BookIndexProducer;
+import com.example.httpreading.common.messaging.BookIndexProducer;
 import com.example.httpreading.repository.BooksRepository;
 import com.example.httpreading.repository.ChaptersRepository;
 import org.slf4j.Logger;

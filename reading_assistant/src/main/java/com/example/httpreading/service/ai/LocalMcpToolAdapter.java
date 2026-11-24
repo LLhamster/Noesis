@@ -2,8 +2,8 @@ package com.example.httpreading.service.ai;
 
 import java.util.Map;
 
-import com.example.httpreading.mcp.ExternalMcpCallResult;
-import com.example.httpreading.mcp.ReadingMcpToolService;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.mcp.ReadingMcpToolService;
 import org.springframework.stereotype.Service;
 
 @Service

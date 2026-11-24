@@ -16,11 +16,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.example.httpreading.memory.embedding.model.EmbeddingModel;
-import com.example.httpreading.memory.model.MemoryItem;
-import com.example.httpreading.memory.storage.DocumentStore;
-import com.example.httpreading.memory.storage.QdrantStore;
-import com.example.httpreading.memory.types.EpisodicMemory;
+import com.example.httpreading.modules.memory.embedding.model.EmbeddingModel;
+import com.example.httpreading.modules.memory.model.MemoryItem;
+import com.example.httpreading.modules.memory.storage.DocumentStore;
+import com.example.httpreading.modules.memory.storage.QdrantStore;
+import com.example.httpreading.modules.memory.types.EpisodicMemory;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 

@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.evolution.PromptOverride;
+import com.example.httpreading.modules.evolution.PromptOverride;
 import com.example.httpreading.service.ModelClient;
 import org.junit.jupiter.api.Test;
 

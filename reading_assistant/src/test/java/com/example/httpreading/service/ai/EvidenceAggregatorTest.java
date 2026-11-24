@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 

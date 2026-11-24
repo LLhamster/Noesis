@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

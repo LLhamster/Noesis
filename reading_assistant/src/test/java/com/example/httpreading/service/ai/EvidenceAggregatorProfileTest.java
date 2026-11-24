@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 

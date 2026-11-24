@@ -6,10 +6,10 @@ import java.util.Map;
 
 import com.example.httpreading.dto.AiChatRequest;
 import com.example.httpreading.dto.ExternalMcpCall;
-import com.example.httpreading.mcp.ExternalMcpAgentResult;
-import com.example.httpreading.mcp.ExternalMcpAgentService;
-import com.example.httpreading.mcp.ExternalMcpCallResult;
-import com.example.httpreading.mcp.ExternalMcpClientService;
+import com.example.httpreading.modules.mcp.ExternalMcpAgentResult;
+import com.example.httpreading.modules.mcp.ExternalMcpAgentService;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.mcp.ExternalMcpClientService;
 import org.springframework.stereotype.Service;
 
 @Service

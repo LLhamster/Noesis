@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.example.httpreading.api.BusinessException;
+import com.example.httpreading.common.web.BusinessException;
 import com.example.httpreading.domain.entity.Books;
 
 class BookFileDownloadServiceTest {

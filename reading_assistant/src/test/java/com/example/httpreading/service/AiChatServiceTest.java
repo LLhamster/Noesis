@@ -8,15 +8,15 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
-import com.example.httpreading.context.manager.DefaultContextManager;
+import com.example.httpreading.modules.context.manager.DefaultContextManager;
 import com.example.httpreading.dto.AiChatInteraction;
 import com.example.httpreading.dto.AiChatRequest;
 import com.example.httpreading.dto.AiChatResponse;
-import com.example.httpreading.evolution.EvolutionExecutionOptions;
-import com.example.httpreading.evolution.PromptOverride;
-import com.example.httpreading.mcp.ExternalMcpAgentService;
-import com.example.httpreading.mcp.ExternalMcpCallResult;
-import com.example.httpreading.mq.cognition.LearningEventPublisher;
+import com.example.httpreading.modules.evolution.EvolutionExecutionOptions;
+import com.example.httpreading.modules.evolution.PromptOverride;
+import com.example.httpreading.modules.mcp.ExternalMcpAgentService;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.cognition.messaging.LearningEventPublisher;
 import com.example.httpreading.service.ai.ChatPlan;
 import com.example.httpreading.service.ai.CollectedEvidence;
 import com.example.httpreading.service.ai.EvidenceAggregator;

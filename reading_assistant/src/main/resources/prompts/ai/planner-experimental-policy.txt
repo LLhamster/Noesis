@@ -1,0 +1,3 @@
+
+实验覆盖指令（仅本次 Self-Evolution 评测生效）：
+[(${experimentalPatch})]

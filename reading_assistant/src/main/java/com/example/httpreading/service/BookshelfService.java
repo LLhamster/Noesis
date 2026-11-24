@@ -14,7 +14,7 @@ import com.example.httpreading.repository.*;
 import com.example.httpreading.domain.entity.*;
 import com.example.httpreading.domain.user.Bookshelf;
 import com.example.httpreading.dto.BookshelfItemResponse;
-import com.example.httpreading.api.ErrorCode;
+import com.example.httpreading.common.web.ErrorCode;
 
 @Service
 public class BookshelfService {

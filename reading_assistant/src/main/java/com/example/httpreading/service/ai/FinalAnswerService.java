@@ -1,8 +1,11 @@
 package com.example.httpreading.service.ai;
 
+import static com.example.httpreading.prompts.PromptTemplates.param;
+
+import com.example.httpreading.prompts.PromptTemplates;
 import com.example.httpreading.dto.AiChatRequest;
-import com.example.httpreading.evolution.EvolvablePromptTemplate;
-import com.example.httpreading.evolution.PromptOverride;
+import com.example.httpreading.modules.evolution.EvolvablePromptTemplate;
+import com.example.httpreading.modules.evolution.PromptOverride;
 import com.example.httpreading.service.ModelClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,14 +14,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class FinalAnswerService {
     private static final Logger log = LoggerFactory.getLogger(FinalAnswerService.class);
-    private static final String DEFAULT_EVOLVABLE_POLICY = """
-        四、回答策略
-        - 直接回答问题，不要模板化开头，例如“简单说”“总的来说”。
-        - 表达要像给普通读者解释；普通阅读追问控制在 4-6 段，每段短一些。
-        - 追问时只回答新增点，不重复上一轮解释。
-        - 如果有补充解释，明确区分“当前资料支持什么”和“补充理解是什么”。
-        - subIntent=CONTRASTIVE_WHY 时，重点回答“为什么仍然选择 B”：更大问题、优先目标、权衡取舍和代价。
-        """;
+    private static final String DEFAULT_EVOLVABLE_POLICY = PromptTemplates.load("ai/answer-policy");
 
     private final ModelClient modelClient;
 
@@ -85,80 +81,19 @@ public class FinalAnswerService {
             ? "没有收集到足够证据。"
             : evidence.formattedEvidence();
         String guidance = plan == null ? "" : plan.answerGuidance();
-        String fixedContract = """
-            你是这个阅读系统中的 AI 助手。你的任务是根据 collectedEvidence、answerGuidance、answerMode 和 answerRequirement 生成最终回答。
-            
-            一、硬边界
-            - 不允许提出、规划或执行工具调用。
-            - 回答以用户问题为中心，collectedEvidence 用于提供上下文、事实锚点和边界。
-            - 不要把公共知识、类比、推理补充说成原文或工具结果。
-            - 证据不足时说明缺少什么，不要伪造来源、人物、时间、地点或搜索结果。
-            - 使用 memoryRefs 时只能说“历史记忆/之前记录”，不能说成“本次搜索结果”；最近对话只用于理解追问，不能大段复述。
-            - type=profile_detail 或 type=profile_search_result 且 usage=style_guidance 的证据是用户画像，只能用于调整解释风格、回答深度、例子类型和背景补充方式。
-            - 用户画像不是书籍原文、不是 RAG 检索结果、不是事实来源；不能用画像替代原文证据。
-            - 如果画像和当前问题无关，或 profile.search_relevant 没有匹配结果，不要提画像，正常回答。
-            - 用户没有主动要求时，不要频繁显式说“根据你的画像”。
-
-            二、answerMode
-            - TEXT_ONLY：只能基于 collectedEvidence。资料没有就说明没有，不补充资料外事实。
-            - CONTEXT_ANCHORED_MODEL_KNOWLEDGE：以 collectedEvidence 为锚点，可以用公共知识补充解释、背景、类比或帮助理解型例子；资料没有直接解释时先说明“当前资料没有直接解释”，再给一般知识辅助理解，并明确这不是原文直接证据。
-            - EXTERNAL_SEARCH_REQUIRED：必须依据 externalMcpRefs 和 collectedEvidence 中的 external_mcp 证据。没有 externalMcpRefs 时，说明当前没有实际执行外部/GitHub/网页/实时搜索，不能声称搜索过；有 externalMcpRefs 时，回答要保留来源 URL 或来源标识。
-            - 如果 externalMcpRefs 只有 FAIL 结果、collectedEvidence 没有 external_mcp 证据，说明外部搜索已经尝试但工具失败，并简要说明失败来源；不能说成“没有 externalMcpRefs”。
-
-            三、evidenceStrictness
-            - STRICT：严格依据证据，不能扩展事实细节。
-            - MEDIUM：优先依据证据；可做有限常识补充，但要标明补充性质。
-            - LOOSE：可以更自由地辅助理解，但不能伪造来源。
-
-            四、固定输出契约
-            - 只输出面向用户的最终回答，不输出规划、工具调用或内部检查过程。
-            - 回答必须围绕 originalQuestion，并遵守下面的运行时输入和证据边界。
-            - 最后列出关键来源；外部搜索回答优先列 URL 或来源标识；没有证据时写“关键来源：当前未收集到足够证据；以上为一般知识辅助理解”。
-
-            五、answerRequirement
-            - allowModelKnowledge=true：允许公共知识补充，但不能伪装成原文证据。
-            - mustDistinguishTextEvidenceAndSupplement=true：必须区分资料证据和补充解释。
-            - requiresConcreteExample=true：需要给例子。先判断是理解辅助型例子，还是严格考据型真实案例。
-            - requiresStorytelling=true：直接进入案例，讲起点、发展、转折、结果，再回扣原文观点。
-            - requiresDetailedProcess=true：讲清过程，不只给结论。
-            - avoidConceptualOpening=true：不要概念式开头。
-            - avoidRepeatingPreviousExplanation=true：不要复述上一轮内容。
-
-            案例处理规则：
-            - 如果用户要求的是“理解辅助型例子”，并且 answerMode=CONTEXT_ANCHORED_MODEL_KNOWLEDGE 或 allowModelKnowledge=true，可以使用公共知识给出具体例子，但必须说明这是补充理解，不是当前资料直接提供的案例。
-            - 如果用户要求的是“严格考据型真实案例”，例如要求出处、时间、地点、姓名、原文案例或外部核验，必须依据 collectedEvidence 或 externalMcpRefs；证据不足时说明缺少什么。
-            - 如果 collectedEvidence 只有背景线索，没有完整案例，可以先说明资料支持的背景，再给出“帮助理解的补充案例”，但不能说成原文案例。
-
-            当前阅读位置：bookId=%s, chapterIndex=%s
-            originalQuestion：%s
-            standaloneQuestion：%s
-            subIntent：%s
-            answerMode=%s
-            evidenceStrictness=%s
-            answerRequirement：%s
-            answerGuidance：%s
-
-            externalMcpPlanRefs：
-            %s
-
-            externalMcpRefs：
-            %s
-
-            collectedEvidence：
-            %s
-            """.formatted(
-            request.getBookId(),
-            request.getChapterIndex(),
-            plan == null ? request.getQuestion() : plan.originalQuestion(),
-            plan == null ? request.getQuestion() : plan.standaloneQuestion(),
-            plan == null ? SubIntent.NONE : plan.subIntent(),
-            plan == null ? AnswerMode.TEXT_ONLY : plan.answerMode(),
-            plan == null ? EvidenceStrictness.STRICT : plan.evidenceStrictness(),
-            plan == null ? AnswerRequirement.normal() : plan.answerRequirement(),
-            guidance,
-            refsText(evidence == null ? null : evidence.externalMcpPlanRefs()),
-            refsText(evidence == null ? null : evidence.externalMcpRefs()),
-            evidenceText);
+        String fixedContract = PromptTemplates.render("ai/answer",
+            param("bookId", request.getBookId()),
+            param("chapterIndex", request.getChapterIndex()),
+            param("originalQuestion", plan == null ? request.getQuestion() : plan.originalQuestion()),
+            param("standaloneQuestion", plan == null ? request.getQuestion() : plan.standaloneQuestion()),
+            param("subIntent", plan == null ? SubIntent.NONE : plan.subIntent()),
+            param("answerMode", plan == null ? AnswerMode.TEXT_ONLY : plan.answerMode()),
+            param("evidenceStrictness", plan == null ? EvidenceStrictness.STRICT : plan.evidenceStrictness()),
+            param("answerRequirement", plan == null ? AnswerRequirement.normal() : plan.answerRequirement()),
+            param("answerGuidance", guidance),
+            param("externalMcpPlanRefs", refsText(evidence == null ? null : evidence.externalMcpPlanRefs())),
+            param("externalMcpRefs", refsText(evidence == null ? null : evidence.externalMcpRefs())),
+            param("collectedEvidence", evidenceText));
         return new EvolvablePromptTemplate(
             fixedContract, DEFAULT_EVOLVABLE_POLICY).render(candidatePatch);
     }
@@ -238,35 +173,12 @@ public class FinalAnswerService {
     }
 
     private String repairPrompt(String originalPrompt, String failedAnswer, String issue, ChatPlan plan) {
-        return """
-            下面这个回答没有通过质量检查，请只输出重写后的最终回答，不要解释检查过程。
-
-            不合格原因：
-            %s
-
-            必须修正的具体点：
-            - 针对上面的“不合格原因”重写，不要只做同义改写。
-            - 继续遵守原始生成提示中的 answerMode、evidenceStrictness、answerRequirement 和证据边界。
-            - TEXT_ONLY 不能补充资料外事实；EXTERNAL_SEARCH_REQUIRED 且没有 externalMcpRefs 时必须说明没有实际执行外部/GitHub/网页/实时搜索；有 externalMcpRefs 时必须基于 external_mcp 证据并保留来源 URL 或来源标识。
-            - 公共知识、帮助理解型例子、类比和推理补充必须标明是“补充理解”，不能伪装成原文证据或工具结果。
-            - 严格考据型真实案例必须有 collectedEvidence 或 externalMcpRefs 支持；证据不足时说明缺少姓名、地点、日期、出处或外部核验。
-            - 如果要求例子、故事或过程，要给出具体例子、起点、发展、转折、结果，并说明它如何对应原文观点。
-            - 如果是在追问，不要复述上一轮内容；如果是 CONTRASTIVE_WHY，重点回答为什么仍然选择该政策或行动。
-
-            原始生成提示：
-            %s
-
-            未通过的回答：
-            %s
-
-            当前 subIntent：%s
-            当前 answerMode：%s
-            """.formatted(
-            issue,
-            originalPrompt,
-            failedAnswer == null ? "" : failedAnswer,
-            plan == null ? SubIntent.NONE : plan.subIntent(),
-            plan == null ? AnswerMode.TEXT_ONLY : plan.answerMode());
+        return PromptTemplates.render("ai/answer-repair",
+            param("qualityIssue", issue),
+            param("originalPrompt", originalPrompt),
+            param("failedAnswer", failedAnswer == null ? "" : failedAnswer),
+            param("subIntent", plan == null ? SubIntent.NONE : plan.subIntent()),
+            param("answerMode", plan == null ? AnswerMode.TEXT_ONLY : plan.answerMode()));
     }
 
     private String externalSearchIssue(CollectedEvidence evidence, String answer) {

@@ -1,0 +1,20 @@
+你是测试用例生成器中的证据用途分类器。请根据每个测试任务的目标、问题和提供证据，
+直接为生成的测试用例输出 evidenceUseMode。不要依赖单个关键词机械分类，要判断回答中
+的具体内容在这个任务里承担什么用途。
+
+模式只能是：
+- STRICT_SOURCE：用户明确要求只能依据原文/给定资料，不能进行证据外补充。
+- SOURCE_GROUNDED_NARRATIVE：任务要求复述历史、原文、真实事件、出处或基于文本还原过程。
+- PEDAGOGICAL_ILLUSTRATION：任务是解释概念、原因或理论，生活人物、数字和场景用于帮助理解，
+  不承担真实事件或原文记录声明。
+
+必须为每个输入恰好输出一项，保留原 signalId 和 failureType。
+只输出 JSON：
+{"cases":[
+  {"signalId":"原值","failureType":"原值",
+   "evidenceUseMode":"STRICT_SOURCE|SOURCE_GROUNDED_NARRATIVE|PEDAGOGICAL_ILLUSTRATION",
+   "reason":"简短语义判断"}
+]}
+
+inputs:
+[(${inputJson})]

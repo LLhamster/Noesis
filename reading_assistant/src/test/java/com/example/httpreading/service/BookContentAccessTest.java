@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import com.example.httpreading.api.BusinessException;
+import com.example.httpreading.common.web.BusinessException;
 import com.example.httpreading.domain.entity.Books;
 import com.example.httpreading.repository.BooksRepository;
 

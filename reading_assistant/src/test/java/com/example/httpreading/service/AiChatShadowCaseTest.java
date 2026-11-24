@@ -1,5 +1,7 @@
 package com.example.httpreading.service;
 
+import com.example.httpreading.modules.memory.AgentMemoryService;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -17,17 +19,17 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 
-import com.example.httpreading.context.manager.DefaultContextManager;
+import com.example.httpreading.modules.context.manager.DefaultContextManager;
 import com.example.httpreading.dto.AiChatRequest;
 import com.example.httpreading.dto.AiChatResponse;
 import com.example.httpreading.dto.ExternalMcpCall;
-import com.example.httpreading.mcp.ExternalMcpAgentService;
-import com.example.httpreading.mcp.ExternalMcpCallResult;
-import com.example.httpreading.mcp.ExternalMcpClientService;
-import com.example.httpreading.mcp.ExternalMcpServerRouterService;
-import com.example.httpreading.mcp.ExternalMcpToolPlannerService;
-import com.example.httpreading.mq.cognition.LearningEventPublisher;
-import com.example.httpreading.mcp.PendingMcpInteractionStore;
+import com.example.httpreading.modules.mcp.ExternalMcpAgentService;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.mcp.ExternalMcpClientService;
+import com.example.httpreading.modules.mcp.ExternalMcpServerRouterService;
+import com.example.httpreading.modules.mcp.ExternalMcpToolPlannerService;
+import com.example.httpreading.modules.cognition.messaging.LearningEventPublisher;
+import com.example.httpreading.modules.mcp.PendingMcpInteractionStore;
 import com.example.httpreading.service.ai.EvidenceAggregator;
 import com.example.httpreading.service.ai.FinalAnswerService;
 import com.example.httpreading.service.ai.LocalMcpToolAdapter;

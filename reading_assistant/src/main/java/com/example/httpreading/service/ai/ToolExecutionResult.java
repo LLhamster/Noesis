@@ -3,7 +3,7 @@ package com.example.httpreading.service.ai;
 import java.util.List;
 
 import com.example.httpreading.dto.AiChatInteraction;
-import com.example.httpreading.mcp.ExternalMcpCallResult;
+import com.example.httpreading.modules.mcp.ExternalMcpCallResult;
 
 public record ToolExecutionResult(List<ExternalMcpCallResult> results,
                                   List<String> planRefs,

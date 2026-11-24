@@ -32,7 +32,7 @@ import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlin
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 
-import com.example.httpreading.api.ErrorCode;
+import com.example.httpreading.common.web.ErrorCode;
 
 @Service
 public class DocumentParseService {

@@ -2,13 +2,13 @@ package com.example.httpreading.service;
 
 import java.util.Map;
 
-import com.example.httpreading.context.manager.ContextManager;
-import com.example.httpreading.context.model.Context;
+import com.example.httpreading.modules.context.manager.ContextManager;
+import com.example.httpreading.modules.context.model.Context;
 import com.example.httpreading.dto.AiChatRequest;
 import com.example.httpreading.dto.AiChatResponse;
-import com.example.httpreading.evolution.EvolutionExecutionOptions;
-import com.example.httpreading.mcp.ExternalMcpAgentService;
-import com.example.httpreading.mq.cognition.LearningEventPublisher;
+import com.example.httpreading.modules.evolution.EvolutionExecutionOptions;
+import com.example.httpreading.modules.mcp.ExternalMcpAgentService;
+import com.example.httpreading.modules.cognition.messaging.LearningEventPublisher;
 import com.example.httpreading.service.RagService.RagAnswer;
 import com.example.httpreading.service.ai.ChatPlan;
 import com.example.httpreading.service.ai.AiChatExecutionResult;
@@ -96,7 +96,7 @@ public class AiChatService {
             response.setSessionId(sessionId);
             response.setMemoryRefs(java.util.List.of());
             response.setExternalMcpRefs(toolExecution.results().stream()
-                .map(com.example.httpreading.mcp.ExternalMcpCallResult::ref)
+                .map(com.example.httpreading.modules.mcp.ExternalMcpCallResult::ref)
                 .toList());
             response.setExternalMcpPlanRefs(toolExecution.planRefs());
             return new AiChatExecutionResult(response, plan);

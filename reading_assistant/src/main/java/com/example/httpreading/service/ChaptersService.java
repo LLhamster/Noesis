@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.httpreading.api.ErrorCode;
+import com.example.httpreading.common.web.ErrorCode;
 import com.example.httpreading.domain.entity.Chapters;
 import com.example.httpreading.repository.ChaptersRepository;
 

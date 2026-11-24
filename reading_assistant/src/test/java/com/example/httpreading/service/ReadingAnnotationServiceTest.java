@@ -12,16 +12,16 @@ import java.util.Optional;
 
 import com.example.httpreading.domain.entity.Books;
 import com.example.httpreading.domain.entity.Chapters;
-import com.example.httpreading.domain.profile.ProfileGrowthEvidence;
+import com.example.httpreading.modules.profile.domain.ProfileGrowthEvidence;
 import com.example.httpreading.domain.user.ReadingAnnotation;
 import com.example.httpreading.dto.ReadingAnnotationDtos.CreateRequest;
 import com.example.httpreading.dto.ReadingAnnotationDtos.UpdateRequest;
 import com.example.httpreading.repository.BooksRepository;
 import com.example.httpreading.repository.ChaptersRepository;
 import com.example.httpreading.repository.ReadingAnnotationRepository;
-import com.example.httpreading.service.profile.BookCategoryService;
-import com.example.httpreading.service.profile.ProfileGrowthEvidenceService;
-import com.example.httpreading.service.profile.ProfileVectorIndexService;
+import com.example.httpreading.modules.profile.service.BookCategoryService;
+import com.example.httpreading.modules.profile.service.ProfileGrowthEvidenceService;
+import com.example.httpreading.modules.profile.service.ProfileVectorIndexService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

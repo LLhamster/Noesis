@@ -1,5 +1,8 @@
 package com.example.httpreading.service;
 
+import static com.example.httpreading.prompts.PromptTemplates.param;
+
+import com.example.httpreading.prompts.PromptTemplates;
 import com.example.httpreading.domain.document.ChunkDoc;
 import com.example.httpreading.domain.entity.Chapters;
 import com.example.httpreading.repository.ChunkRepository;
@@ -175,24 +178,22 @@ public class RagService {
     }
 
     String buildPrompt(String question, List<ChunkDoc> chunks, String additionalContext) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("你是一个帮助用户理解技术书籍的助教。请严格基于给定上下文回答，不要编造未出现的信息。\n\n");
-
-        if (additionalContext != null && !additionalContext.isBlank()) {
-            sb.append("【会话上下文】\n").append(additionalContext).append("\n\n");
-        }
-
+        String context = additionalContext == null || additionalContext.isBlank()
+            ? ""
+            : PromptTemplates.render("rag/context",
+                param("additionalContext", additionalContext));
+        StringBuilder references = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++) {
             ChunkDoc chunk = chunks.get(i);
-            sb.append("【参考片段").append(i + 1).append("】\n");
-            sb.append("来源：").append(chunk.getSourceRef()).append("\n");
-            sb.append("内容：").append(chunk.getContent()).append("\n\n");
+            references.append(PromptTemplates.render("rag/reference",
+                param("number", i + 1),
+                param("source", chunk.getSourceRef()),
+                param("content", chunk.getContent())));
         }
-
-        sb.append("【用户问题】").append(question).append("\n");
-        sb.append("请用中文回答。如果问题与片段内容无关，请说明“未在当前阅读内容中找到相关信息”。");
-        sb.append("最后列出答案依据的来源。");
-        return sb.toString();
+        return PromptTemplates.render("rag/answer",
+            param("context", context),
+            param("references", references),
+            param("question", question));
     }
 
     public int rebuildIndexForBook(Long bookId, List<Chapters> chapters, String bookTitle) {

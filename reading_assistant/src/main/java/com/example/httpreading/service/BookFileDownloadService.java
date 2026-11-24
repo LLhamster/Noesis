@@ -5,7 +5,7 @@ import java.nio.file.Path;
 
 import org.springframework.stereotype.Service;
 
-import com.example.httpreading.api.ErrorCode;
+import com.example.httpreading.common.web.ErrorCode;
 import com.example.httpreading.domain.entity.Books;
 
 @Service

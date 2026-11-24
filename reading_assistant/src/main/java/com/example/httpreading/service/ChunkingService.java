@@ -2,9 +2,9 @@ package com.example.httpreading.service;
 
 import com.example.httpreading.domain.document.ChunkDoc;
 import com.example.httpreading.domain.entity.Chapters;
-import com.example.httpreading.memory.rag.RagDocument;
-import com.example.httpreading.memory.rag.RagDocumentChunk;
-import com.example.httpreading.memory.rag.RagDocumentProcessor;
+import com.example.httpreading.modules.memory.rag.RagDocument;
+import com.example.httpreading.modules.memory.rag.RagDocumentChunk;
+import com.example.httpreading.modules.memory.rag.RagDocumentProcessor;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

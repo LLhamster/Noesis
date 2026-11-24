@@ -277,30 +277,18 @@ curl -X POST http://localhost:8080/api/admin/books/51/replace \
 
 ## 项目结构
 
-```text
-Noesis/
-├── readest/                 # 跨平台阅读器客户端
-└── reading_assistant/       # 智能阅读与 AI 助读后端
-    ├── pom.xml
-    ├── docker-compose.yml
-    ├── Dockerfile
-    ├── README.md
-    ├── src/main/
-    │   ├── resources/
-    │   │   ├── application.yml
-    │   │   ├── application.yml.example
-    │   │   └── static/
-    │   │       └── reader.html
-    │   └── java/com/example/httpreading/
-    │       ├── controller/
-    │       ├── service/
-    │       ├── context/
-    │       ├── memory/
-    │       ├── mcp/
-    │       ├── mq/
-    │       ├── repository/
-    │       ├── security/
-    │       ├── config/
-    │       ├── domain/
-    │       └── dto/
-```
+以下 Java 包均位于 `src/main/java/com/example/httpreading/`。
+
+| 位置 | 职责 |
+|---|---|
+| `api/` | HTTP 控制器，接收请求并调用对应业务服务 |
+| `service/` | 书籍、书架、阅读、AI 问答等主业务流程 |
+| `repository/` | 主业务的数据库和搜索索引访问 |
+| `domain/`、`dto/` | 主业务的领域对象和数据传输类型 |
+| `common/` | Web 响应和异常处理、安全、Spring 配置及主业务消息设施 |
+| `modules/` | 记忆（`memory`）、MCP（`mcp`）、上下文（`context`）、认知（`cognition`）、画像（`profile`）与评估演进（`evolution`）。画像和认知的仓储随各自模块维护 |
+
+模型提示词集中在 `src/main/resources/prompts/`，按功能分目录。动态模板由
+`prompts.PromptTemplates` 使用 Thymeleaf 纯文本模式渲染。模板用 `[(${question})]`
+引用具名变量，Java 服务负责传入对应数据并执行调用。固定提示词直接读取文件。
+跨业务复用的纯工具可以放在 `common/util/`，功能内部的工具随所属模块维护。

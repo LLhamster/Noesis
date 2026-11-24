@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import com.example.httpreading.api.ErrorCode;
+import com.example.httpreading.common.web.ErrorCode;
 import com.example.httpreading.domain.entity.Books;
 import com.example.httpreading.repository.BooksRepository;
 
