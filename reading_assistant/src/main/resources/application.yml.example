@@ -1,0 +1,138 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+      - http://localhost:5173
+      - http://127.0.0.1:3000
+      - http://127.0.0.1:5173
+      - tauri://localhost
+      - http://tauri.localhost
+  ai:
+    rate-limit:
+      max-requests: 20
+      window-seconds: 60
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 220MB
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/http_reading?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:reading_assistant}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: update
+  elasticsearch:
+    uris: ${SPRING_ELASTICSEARCH_URIS:http://localhost:9200}
+    connection-timeout: ${SPRING_ELASTICSEARCH_CONNECTION_TIMEOUT:1s}
+    socket-timeout: ${SPRING_ELASTICSEARCH_SOCKET_TIMEOUT:30s}
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+cache:
+  enabled: ${CACHE_ENABLED:true}
+
+security:
+  jwt:
+    secret: ${SECURITY_JWT_SECRET:change-me-change-me-change-me-change-me}
+    ttlSeconds: ${SECURITY_JWT_TTL_SECONDS:86400}
+
+http-reading:
+  storage:
+    root: ${HTTP_READING_STORAGE_ROOT:${user.home}/.http-reading}
+
+memory:
+  storage: ${MEMORY_STORAGE:mysql}
+
+mcp:
+  client:
+    servers:
+      - name: self-local
+        description: "本项目内部阅读系统 MCP server，提供阅读上下文能力(context.get_current_page/context.get_recent_dialogue)、书籍 RAG 能力(rag.search/rag.answer)、用户记忆能力(memory.search)、用户画像能力(profile.list_categories/profile.get_category_detail/profile.search_relevant)。用户画像可用于个性化解释、推荐下一步阅读、关联用户以前学过的知识；不用于通用百科或外部网站信息。"
+        url: http://localhost:8080/mcp
+        enabled: true
+        timeoutSeconds: 10
+        headers: {}
+        allowedTools:
+          - memory_search
+          - profile_list_categories
+          - profile_get_category_detail
+          - profile_search_relevant
+          - rag_retrieve
+          - rag_answer
+          - context_get_recent_dialogue
+          - context_get_current_page
+          - context_build
+      - name: github
+        description: "GitHub MCP 服务"
+        url: https://api.githubcopilot.com/mcp/
+        enabled: false
+        timeoutSeconds: 20
+        headers:
+          Authorization: Bearer ${GITHUB_TOKEN:}
+        allowedTools:
+          - get_me
+          - search_repositories
+          - get_file_contents
+          - search_code
+          - list_branches
+          - list_commits
+          - get_commit
+      - name: web-search
+        description: "通用网页搜索 MCP 服务，用于网页资料、实时信息、新闻、最新情况、外部知识补充和事实核验；只返回外部搜索或网页抓取证据，不用于本地书籍 RAG、用户记忆或用户画像。工具结果应包含 title、url、snippet、publishedAt、source，以及 summary 或 content。"
+        url: ${WEB_SEARCH_MCP_URL:http://localhost:8080/mcp}
+        enabled: ${WEB_SEARCH_MCP_ENABLED:true}
+        timeoutSeconds: 20
+        headers:
+          Authorization: Bearer ${WEB_SEARCH_MCP_TOKEN:}
+        allowedTools:
+          - web_search
+          - web_fetch
+
+web-search:
+  duckduckgo:
+    endpoint: ${WEB_SEARCH_DUCKDUCKGO_ENDPOINT:https://duckduckgo.com/html/}
+  timeout-seconds: ${WEB_SEARCH_TIMEOUT_SECONDS:10}
+
+vector-db:
+  type: Qdrant
+  url: ${VECTOR_DB_URL:}
+  api-key: ${VECTOR_DB_API_KEY:}
+  collection: ${VECTOR_DB_COLLECTION:hello_agents_vectors}
+  vector-size: 1024
+  distance: cosine
+  timeout: 30
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{reqId}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{reqId}] %logger{36} - %msg%n"
+  file:
+    name: server.log
+  level:
+    root: INFO
+    com.example.httpreading: DEBUG
+    io.modelcontextprotocol.client.LifecycleInitializer: ERROR
+
+model:
+  apiKey: "${DEEPSEEK_API_KEY:${MODEL_API_KEY:}}"
+  baseUrl: "${MODEL_BASE_URL:https://api.deepseek.com/chat/completions}"
+  chatModel: "${MODEL_CHAT_MODEL:deepseek-chat}"
+  embedding:
+    type: ${EMBEDDING_TYPE:dashscope}
+    apiKey: ${EMBEDDING_API_KEY:}
+    embeddingModel: ${EMBEDDING_MODEL:text-embedding-v3}
+    baseUrl: ${EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}

@@ -1,0 +1,23 @@
+# Local repository history and internal documents
+/.noesis-local-history/
+/reading_assistant/docs/
+
+# Local environment and credentials
+.env
+.env.*
+!.env*.example
+application.yml
+cookies.txt
+resume_text.txt
+*.pem
+*.key
+*.p12
+*.jks
+*.mobileprovision
+
+# Local editor, OS and build files
+/.vscode/
+.DS_Store
+node_modules/
+target/
+.next/

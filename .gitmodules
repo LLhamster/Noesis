@@ -1,0 +1,24 @@
+[submodule "readest/packages/foliate-js"]
+	path = readest/packages/foliate-js
+	url = https://github.com/readest/foliate-js.git
+[submodule "readest/packages/tauri"]
+	path = readest/packages/tauri
+	url = https://github.com/readest/tauri.git
+[submodule "readest/packages/simplecc-wasm"]
+	path = readest/packages/simplecc-wasm
+	url = https://github.com/readest/simplecc-wasm.git
+[submodule "readest/apps/readest-app/src-tauri/plugins/tauri-plugin-turso"]
+	path = readest/apps/readest-app/src-tauri/plugins/tauri-plugin-turso
+	url = https://github.com/readest/tauri-plugin-turso.git
+[submodule "readest/apps/readest-app/.claude/skills/gstack"]
+	path = readest/apps/readest-app/.claude/skills/gstack
+	url = https://github.com/garrytan/gstack.git
+[submodule "readest/packages/qcms"]
+	path = readest/packages/qcms
+	url = https://github.com/mozilla/pdf.js.qcms.git
+[submodule "readest/packages/js-mdict"]
+	path = readest/packages/js-mdict
+	url = https://github.com/readest/js-mdict.git
+[submodule "readest/apps/readest-app/src-tauri/plugins/tauri-plugin-webview-upgrade"]
+	path = readest/apps/readest-app/src-tauri/plugins/tauri-plugin-webview-upgrade
+	url = https://github.com/readest/tauri-plugin-webview-upgrade.git

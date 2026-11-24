@@ -1,0 +1,80 @@
+# =========================
+# Maven / Java
+# =========================
+target/
+*.class
+*.jar
+*.war
+
+# =========================
+# IDE
+# =========================
+.idea/
+*.iml
+.vscode/
+
+# =========================
+# Spring Boot Config
+# =========================
+src/main/resources/application.yml
+src/main/resources/application-*.yml
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+*.gz
+*.tmp
+server.log*
+
+# =========================
+# Runtime Files
+# =========================
+BOOT-INF/
+
+# =========================
+# Flutter / Mobile
+# =========================
+mobile_app/.dart_tool/
+mobile_app/.flutter-plugins
+mobile_app/.flutter-plugins-dependencies
+mobile_app/build/
+mobile_app/android/
+mobile_app/ios/
+mobile_app/linux/
+mobile_app/macos/
+mobile_app/windows/
+
+# =========================
+# Credentials
+# =========================
+cookies.txt
+
+# =========================
+# Personal Files
+# =========================
+*.docx
+*.pdf
+
+# 如果你不想上传这些个人记录
+resume_text.txt
+memory/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+.agents/
+
+# Internal project documentation
+/docs/
