@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { RiDeleteBinLine } from 'react-icons/ri';
+import { RiDeleteBinLine, RiSparklingLine } from 'react-icons/ri';
 
 import * as CFI from 'foliate-js/epubcfi.js';
 import { useEnv } from '@/context/EnvContext';
@@ -49,6 +49,7 @@ import {
 } from '@/utils/sel';
 import { getPopupBounds, offsetPosition } from '@/utils/insets';
 import { eventDispatcher } from '@/utils/event';
+import { getReadingAssistantBookId } from '@/services/readingAssistant/library';
 import { setReadingAssistantSelection } from '@/services/readingAssistant/selection';
 import { findTocItemBS } from '@/services/nav';
 import { throttle } from '@/utils/throttle';
@@ -159,8 +160,8 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const getView = useReaderStore((s) => s.getView);
   const getViewsById = useReaderStore((s) => s.getViewsById);
   const getViewSettings = useReaderStore((s) => s.getViewSettings);
-  const { setNotebookVisible, setNotebookActiveTab } = useNotebookStore();
-  const { clearBooknotesNav, isSideBarVisible } = useSidebarStore();
+  const { setNotebookVisible, setNotebookActiveTab, openNotebookForQuestion } = useNotebookStore();
+  const { clearBooknotesNav, isSideBarVisible, setSideBarBookKey } = useSidebarStore();
   const { listenToNativeTouchEvents } = useDeviceControlStore();
   const { loadCustomDictionaries } = useCustomDictionaryStore();
   const { selectFiles } = useFileSelector(appService, _);
@@ -313,6 +314,9 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const annotPopupMaxWidth = Math.min(useResponsiveSize(300), maxWidth);
   const annotPopupToolSize = useResponsiveSize(44);
   const toolbarToolTypes = getToolbarToolTypes(viewSettings.annotationToolbarItems, canShare);
+  const canAskAboutSelection =
+    !!selection?.text.trim() && getReadingAssistantBookId(bookKey.split('-')[0]!) !== null;
+  const toolbarButtonCount = toolbarToolTypes.length + Number(canAskAboutSelection);
   const highlightOptionsGap = toolbarToolTypes.length <= 4 ? 4 : 8;
   // Three 30px styles, a four- or five-color pill (100px or 122px), and three gaps;
   // the global toggle adds a 30px button and a gap. Keep in sync with HighlightOptions.
@@ -329,7 +333,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
       ? annotPopupMaxWidth
       : Math.min(
           Math.max(
-            Math.max(toolbarToolTypes.length, 1) * annotPopupToolSize,
+            Math.max(toolbarButtonCount, 1) * annotPopupToolSize,
             highlightOptionsAvailable ? highlightOptionsMinWidth : 0,
           ),
           annotPopupMaxWidth,
@@ -2672,6 +2676,22 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const toolButtons = toolbarToolTypes
     .map(buildToolButton)
     .filter((button): button is NonNullable<typeof button> => button !== null);
+
+  if (selection && canAskAboutSelection) {
+    toolButtons.unshift({
+      tooltipText: _('Ask Reading Assistant'),
+      Icon: RiSparklingLine,
+      onClick: () => {
+        handleDismissPopupAndSelection();
+        setSideBarBookKey(bookKey);
+        openNotebookForQuestion({
+          bookKey,
+          text: selection.text.trim(),
+          chapterIndex: Math.max(1, selection.index + 1),
+        });
+      },
+    });
+  }
 
   // The lookup popups never deselect (handleDictionary / handleTranslation /
   // handleProofread only flip popup flags), so a genuine selection is still

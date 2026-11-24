@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useNotebookStore } from '@/store/notebookStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useReaderStore } from '@/store/readerStore';
 import { askReadingAssistant, type ReadingAssistantAnswer } from '@/services/readingAssistant/ai';
@@ -22,6 +23,9 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
   const _ = useTranslation();
   const progress = useBookProgress(bookKey);
   const getView = useReaderStore((state) => state.getView);
+  const questionContext = useNotebookStore((state) =>
+    state.notebookQuestionContext?.bookKey === bookKey ? state.notebookQuestionContext : null,
+  );
   const [question, setQuestion] = useState('');
   const [selectedText, setSelectedText] = useState(() => getReadingAssistantSelection(bookKey));
   const [noteDraft, setNoteDraft] = useState('');
@@ -153,10 +157,10 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
     setBusy(true);
     setError('');
     try {
-      const passage = getLiveSelection();
+      const passage = questionContext?.text ?? getLiveSelection();
       const answer = await askReadingAssistant({
         bookId,
-        chapterIndex: Math.max(1, (progress?.index ?? 0) + 1),
+        chapterIndex: questionContext?.chapterIndex ?? Math.max(1, (progress?.index ?? 0) + 1),
         question: question.trim(),
         selectedText: passage || undefined,
       });
@@ -173,29 +177,29 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
   return (
     <section className='eink-bordered border-base-200 bg-base-100 space-y-3 rounded-lg border p-4'>
       <h3 className='font-semibold'>{_('Reading Assistant')}</h3>
-      {selectedText && (
-        <div className='space-y-2'>
-          <blockquote className='border-base-300 text-base-content/70 line-clamp-3 border-s-2 ps-3 text-sm'>
-            {selectedText}
-          </blockquote>
-          <div className='flex gap-2'>
-            <input
-              type='text'
-              aria-label={_('Personal note')}
-              className='input input-sm eink-bordered flex-1 text-sm'
-              value={noteDraft}
-              onChange={(event) => setNoteDraft(event.target.value)}
-              placeholder={_('Add personal note (optional)')}
-            />
-            <button
-              type='button'
-              className='btn btn-outline btn-sm eink-bordered shrink-0'
-              disabled={savingNote}
-              onClick={() => void handleSaveAnnotation()}
-            >
-              {savingNote ? _('Saving...') : _('Save to account')}
-            </button>
-          </div>
+      {(questionContext?.text || selectedText) && (
+        <blockquote className='border-base-300 text-base-content/70 line-clamp-3 border-s-2 ps-3 text-sm'>
+          {questionContext?.text || selectedText}
+        </blockquote>
+      )}
+      {selectedText && !questionContext && (
+        <div className='flex gap-2'>
+          <input
+            type='text'
+            aria-label={_('Personal note')}
+            className='input input-sm eink-bordered flex-1 text-sm'
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+            placeholder={_('Add personal note (optional)')}
+          />
+          <button
+            type='button'
+            className='btn btn-outline btn-sm eink-bordered shrink-0'
+            disabled={savingNote}
+            onClick={() => void handleSaveAnnotation()}
+          >
+            {savingNote ? _('Saving...') : _('Save to account')}
+          </button>
         </div>
       )}
       <form

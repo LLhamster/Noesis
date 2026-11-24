@@ -4,7 +4,15 @@ import { TextSelection } from '@/utils/sel';
 
 export type NotebookTab = 'notes' | 'ai';
 
+interface NotebookQuestionContext {
+  bookKey: string;
+  text: string;
+  chapterIndex: number;
+}
+
 interface NotebookState {
+  notebookQuestionContext: NotebookQuestionContext | null;
+  openNotebookForQuestion: (context: NotebookQuestionContext) => void;
   notebookWidth: string;
   isNotebookVisible: boolean;
   isNotebookPinned: boolean;
@@ -37,6 +45,9 @@ export const useNotebookStore = create<NotebookState>((set, get) => ({
   isNotebookVisible: false,
   isNotebookPinned: false,
   notebookActiveTab: 'notes',
+  notebookQuestionContext: null,
+  openNotebookForQuestion: (context) =>
+    set({ isNotebookVisible: true, notebookActiveTab: 'ai', notebookQuestionContext: context }),
   notebookNewAnnotation: null,
   notebookNewHighlightIds: [],
   notebookEditAnnotation: null,
@@ -44,9 +55,13 @@ export const useNotebookStore = create<NotebookState>((set, get) => ({
   getIsNotebookVisible: () => get().isNotebookVisible,
   getNotebookWidth: () => get().notebookWidth,
   setNotebookWidth: (width: string) => set({ notebookWidth: width }),
-  toggleNotebook: () => set((state) => ({ isNotebookVisible: !state.isNotebookVisible })),
+  toggleNotebook: () => get().setNotebookVisible(!get().isNotebookVisible),
   toggleNotebookPin: () => set((state) => ({ isNotebookPinned: !state.isNotebookPinned })),
-  setNotebookVisible: (visible: boolean) => set({ isNotebookVisible: visible }),
+  setNotebookVisible: (visible: boolean) =>
+    set((state) => ({
+      isNotebookVisible: visible,
+      notebookQuestionContext: visible ? state.notebookQuestionContext : null,
+    })),
   setNotebookPin: (pinned: boolean) => set({ isNotebookPinned: pinned }),
   setNotebookActiveTab: (tab: NotebookTab) => set({ notebookActiveTab: tab }),
   setNotebookNewAnnotation: (selection: TextSelection | null) =>

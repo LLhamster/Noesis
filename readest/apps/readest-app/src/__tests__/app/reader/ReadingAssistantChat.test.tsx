@@ -44,6 +44,7 @@ vi.mock('@/services/readingAssistant/userState', () => ({
   updateReadingAssistantAnnotation: vi.fn(),
 }));
 
+import { useNotebookStore } from '@/store/notebookStore';
 import ReadingAssistantChat from '@/app/reader/components/notebook/ReadingAssistantChat';
 import { askReadingAssistant } from '@/services/readingAssistant/ai';
 import {
@@ -85,6 +86,35 @@ describe('Reading Assistant reader panel', () => {
     );
     expect(await screen.findByText('This passage describes the setting.')).toBeTruthy();
     expect(screen.getByText('Chapter 2')).toBeTruthy();
+  });
+
+  it('uses the toolbar passage and its original chapter after the selection disappears', async () => {
+    try {
+      useNotebookStore.getState().openNotebookForQuestion({
+        bookKey: 'local-book',
+        text: 'passage from toolbar',
+        chapterIndex: 4,
+      });
+      vi.mocked(askReadingAssistant).mockResolvedValue({ answer: 'Answer', sources: [] });
+      render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
+
+      expect(screen.getByText('passage from toolbar')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('Ask about this book'), {
+        target: { value: 'Explain this' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Ask Reading Assistant' }));
+
+      await waitFor(() =>
+        expect(askReadingAssistant).toHaveBeenCalledWith({
+          bookId: 22,
+          chapterIndex: 4,
+          question: 'Explain this',
+          selectedText: 'passage from toolbar',
+        }),
+      );
+    } finally {
+      useNotebookStore.getState().setNotebookVisible(false);
+    }
   });
 
   it('syncs CFI reading progress and saves highlighted notes to the user account', async () => {
