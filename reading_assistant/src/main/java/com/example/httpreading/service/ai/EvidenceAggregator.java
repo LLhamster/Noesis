@@ -43,6 +43,15 @@ public class EvidenceAggregator {
             }
         }
 
+        String dialogue = request.getRecentConversationDialogue();
+        if (dialogue != null) {
+            items.removeIf(item -> "recent_dialogue".equals(item.type()));
+            if (!dialogue.isBlank()) {
+                items.add(new EvidenceItem("context:recent_dialogue", "recent_dialogue",
+                    "最近对话", dialogue, 40, 0.75d, Map.of()));
+            }
+        }
+
         List<EvidenceItem> normalized = normalize(items);
         return new CollectedEvidence(
             normalized,

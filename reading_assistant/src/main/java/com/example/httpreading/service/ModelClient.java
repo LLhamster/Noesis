@@ -1,9 +1,11 @@
 package com.example.httpreading.service;
 
 import okhttp3.*;
+import okio.BufferedSink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -23,6 +25,12 @@ public class ModelClient {
             new OkHttpClient.Builder()
                     .readTimeout(300, TimeUnit.SECONDS)
                     .build();
+
+    private static final OkHttpClient SINGLE_ATTEMPT_CLIENT = HTTP_CLIENT.newBuilder()
+            .retryOnConnectionFailure(false)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build();
 
     @Value("${model.apiKey:}")
     private String apiKey;
@@ -48,7 +56,7 @@ public class ModelClient {
         ModelClientException lastException = null;
         for (int attempt = 1; attempt <= MAX_CHAT_ATTEMPTS; attempt++) {
             try {
-                return doChat(question, attempt, resolvedOptions);
+                return doChat(question, attempt, resolvedOptions, HTTP_CLIENT);
             } catch (ModelClientException exception) {
                 lastException = exception;
                 if (!exception.retryable() || attempt >= MAX_CHAT_ATTEMPTS) {
@@ -62,7 +70,19 @@ public class ModelClient {
             : lastException;
     }
 
-    private String doChat(String question, int attempt, ChatOptions options) {
+    public String chatOnce(String question) {
+        try {
+            String answer = doChat(question, 1, ChatOptions.defaults(), SINGLE_ATTEMPT_CLIENT);
+            if (answer.isBlank()) {
+                throw new ModelClientException("模型未返回回答", -1, false);
+            }
+            return answer;
+        } catch (JSONException error) {
+            throw new ModelClientException("模型返回格式不符合预期", -1, false, error);
+        }
+    }
+
+    private String doChat(String question, int attempt, ChatOptions options, OkHttpClient client) {
         try {
             JSONObject root = new JSONObject();
             root.put("model", chatModel());
@@ -78,7 +98,8 @@ public class ModelClient {
             }
 
             MediaType mediaType = MediaType.parse("application/json");
-            RequestBody body = RequestBody.create(mediaType, root.toString());
+            RequestBody jsonBody = RequestBody.create(mediaType, root.toString());
+            RequestBody body = client == SINGLE_ATTEMPT_CLIENT ? oneShot(jsonBody) : jsonBody;
 
             Request.Builder builder = new Request.Builder()
                     .url(chatUrl())
@@ -90,7 +111,7 @@ public class ModelClient {
 
             Request request = builder.build();
             String raw;
-            try (Response response = HTTP_CLIENT.newCall(request).execute()) {
+            try (Response response = client.newCall(request).execute()) {
                 raw = response.body() == null ? "" : response.body().string();
                 if (!response.isSuccessful()) {
                     boolean retryable = isRetryableStatus(response.code());
@@ -114,11 +135,38 @@ public class ModelClient {
                     return msg.optString("content", "");
                 }
             }
+            if (client == SINGLE_ATTEMPT_CLIENT) {
+                throw new ModelClientException("模型返回格式不符合预期", -1, false);
+            }
             return "模型返回格式不符合预期";
         } catch (IOException e) {
             log.warn("调用模型接口异常: {}", e.getMessage());
             throw new ModelClientException("调用模型接口异常: " + e.getMessage(), -1, true, e);
         }
+    }
+
+    private static RequestBody oneShot(RequestBody body) {
+        return new RequestBody() {
+            @Override
+            public MediaType contentType() {
+                return body.contentType();
+            }
+
+            @Override
+            public long contentLength() throws IOException {
+                return body.contentLength();
+            }
+
+            @Override
+            public void writeTo(BufferedSink sink) throws IOException {
+                body.writeTo(sink);
+            }
+
+            @Override
+            public boolean isOneShot() {
+                return true;
+            }
+        };
     }
 
     private boolean isRetryableStatus(int statusCode) {
@@ -192,27 +240,28 @@ public class ModelClient {
             }
 
             Request request = builder.build();
-            Response response = HTTP_CLIENT.newCall(request).execute();
+            try (Response response = HTTP_CLIENT.newCall(request).execute()) {
 
-            if (!response.isSuccessful()) {
-                System.out.println("Embedding HTTP error: " + response.code() + " " + response.message());
+                if (!response.isSuccessful()) {
+                    System.out.println("Embedding HTTP error: " + response.code() + " " + response.message());
+                    return new ArrayList<>();
+                }
+
+                String raw = response.body().string();
+                JSONObject json = new JSONObject(raw);
+                JSONArray data = json.optJSONArray("data");
+                if (data != null && data.length() > 0) {
+                    JSONArray embedding = data.getJSONObject(0).optJSONArray("embedding");
+                    if (embedding != null) {
+                        List<Float> result = new ArrayList<>(embedding.length());
+                        for (int i = 0; i < embedding.length(); i++) {
+                            result.add((float) embedding.getDouble(i));
+                        }
+                        return result;
+                    }
+                }
                 return new ArrayList<>();
             }
-
-            String raw = response.body().string();
-            JSONObject json = new JSONObject(raw);
-            JSONArray data = json.optJSONArray("data");
-            if (data != null && data.length() > 0) {
-                JSONArray embedding = data.getJSONObject(0).optJSONArray("embedding");
-                if (embedding != null) {
-                    List<Float> result = new ArrayList<>(embedding.length());
-                    for (int i = 0; i < embedding.length(); i++) {
-                        result.add((float) embedding.getDouble(i));
-                    }
-                    return result;
-                }
-            }
-            return new ArrayList<>();
         } catch (IOException e) {
             e.printStackTrace();
             return new ArrayList<>();
@@ -240,27 +289,28 @@ public class ModelClient {
                     .addHeader("Authorization", "Bearer " + dashscopeApiKey);
 
             Request request = builder.build();
-            Response response = HTTP_CLIENT.newCall(request).execute();
+            try (Response response = HTTP_CLIENT.newCall(request).execute()) {
 
-            if (!response.isSuccessful()) {
-                System.out.println("DashScope Embedding HTTP error: " + response.code() + " " + response.message());
+                if (!response.isSuccessful()) {
+                    System.out.println("DashScope Embedding HTTP error: " + response.code() + " " + response.message());
+                    return new ArrayList<>();
+                }
+
+                String raw = response.body().string();
+                JSONObject json = new JSONObject(raw);
+                JSONArray data = json.optJSONArray("data");
+                if (data != null && data.length() > 0) {
+                    JSONArray embedding = data.getJSONObject(0).optJSONArray("embedding");
+                    if (embedding != null) {
+                        List<Float> result = new ArrayList<>(embedding.length());
+                        for (int i = 0; i < embedding.length(); i++) {
+                            result.add((float) embedding.getDouble(i));
+                        }
+                        return result;
+                    }
+                }
                 return new ArrayList<>();
             }
-
-            String raw = response.body().string();
-            JSONObject json = new JSONObject(raw);
-            JSONArray data = json.optJSONArray("data");
-            if (data != null && data.length() > 0) {
-                JSONArray embedding = data.getJSONObject(0).optJSONArray("embedding");
-                if (embedding != null) {
-                    List<Float> result = new ArrayList<>(embedding.length());
-                    for (int i = 0; i < embedding.length(); i++) {
-                        result.add((float) embedding.getDouble(i));
-                    }
-                    return result;
-                }
-            }
-            return new ArrayList<>();
         } catch (IOException e) {
             e.printStackTrace();
             return new ArrayList<>();

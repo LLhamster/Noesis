@@ -3,7 +3,16 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useNotebookStore } from '@/store/notebookStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useReaderStore } from '@/store/readerStore';
-import { askReadingAssistant, type ReadingAssistantAnswer } from '@/services/readingAssistant/ai';
+import {
+  askReadingAssistant,
+  createReadingConversation,
+  getReadingAnswerMode,
+  getReadingConversation,
+  listReadingConversations,
+  saveReadingAnswerMode,
+  type ReadingConversation,
+  type ReadingConversationPage,
+} from '@/services/readingAssistant/ai';
 import {
   getReadingAssistantSession,
   ReadingAssistantError,
@@ -26,12 +35,19 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
   const questionContext = useNotebookStore((state) =>
     state.notebookQuestionContext?.bookKey === bookKey ? state.notebookQuestionContext : null,
   );
+  const isNotebookPinned = useNotebookStore((state) => state.isNotebookPinned);
+  const clearQuestionContext = useNotebookStore((state) => state.clearNotebookQuestionContext);
   const [question, setQuestion] = useState('');
+  const [mode, setMode] = useState(getReadingAnswerMode);
   const [selectedText, setSelectedText] = useState(() => getReadingAssistantSelection(bookKey));
   const [noteDraft, setNoteDraft] = useState('');
   const [editingNote, setEditingNote] = useState<{ id: number; text: string } | null>(null);
   const [annotations, setAnnotations] = useState<AccountReadingAnnotation[]>([]);
-  const [result, setResult] = useState<ReadingAssistantAnswer | null>(null);
+  const [conversations, setConversations] = useState<ReadingConversation[]>([]);
+  const [conversationId, setConversationId] = useState('');
+  const activeConversation = useRef('');
+  const [history, setHistory] = useState<ReadingConversationPage>({ turns: [], before: null });
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
@@ -152,20 +168,124 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
     }
   };
 
+  useEffect(() => {
+    let active = true;
+    void listReadingConversations(bookId)
+      .then(async (list) => {
+        if (!active) return;
+        setConversations(list);
+        const id = list[0]?.id;
+        if (!id) return;
+        const page = await getReadingConversation(bookId, id);
+        if (!active) return;
+        activeConversation.current = id;
+        setConversationId(id);
+        setHistory(page);
+      })
+      .catch(() => {
+        if (active) setError(_('Could not load conversations.'));
+      })
+      .finally(() => {
+        if (active) setLoadingHistory(false);
+      });
+    return () => {
+      active = false;
+      activeConversation.current = '';
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookId]);
+
+  const openConversation = async (id?: string) => {
+    setLoadingHistory(true);
+    setError('');
+    try {
+      const created = id ? null : await createReadingConversation(bookId);
+      const nextId = id ?? created?.id;
+      if (!nextId) return;
+      const page = await getReadingConversation(bookId, nextId);
+      activeConversation.current = nextId;
+      setConversationId(nextId);
+      if (created) setConversations((items) => [created, ...items]);
+      setHistory(page);
+      clearQuestionContext();
+      setQuestion('');
+    } catch {
+      setError(_('Could not open the conversation.'));
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const loadEarlierTurns = async () => {
+    if (!history.before) return;
+    const id = conversationId;
+    setLoadingHistory(true);
+    try {
+      const page = await getReadingConversation(bookId, id, history.before);
+      if (activeConversation.current !== id) return;
+      setHistory((previous) => ({
+        turns: [...page.turns, ...previous.turns],
+        before: page.before,
+      }));
+    } catch {
+      setError(_('Could not load conversations.'));
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const submit = async () => {
-    if (!question.trim()) return;
+    if (!question.trim() || !conversationId || loadingHistory || busy) return;
+    const id = conversationId;
+    const submittedQuestion = question.trim();
     setBusy(true);
     setError('');
     try {
-      const passage = questionContext?.text ?? getLiveSelection();
-      const answer = await askReadingAssistant({
+      const passage = questionContext?.text ?? (isNotebookPinned ? '' : getLiveSelection());
+      const chapterIndex = questionContext?.chapterIndex ?? Math.max(1, (progress?.index ?? 0) + 1);
+      const result = await askReadingAssistant({
+        conversationId: id,
+        mode,
         bookId,
-        chapterIndex: questionContext?.chapterIndex ?? Math.max(1, (progress?.index ?? 0) + 1),
-        question: question.trim(),
+        chapterIndex,
+        question: submittedQuestion,
         selectedText: passage || undefined,
       });
-      setResult(answer);
+      if (activeConversation.current === id) {
+        const turnId = result.conversationTurnId;
+        if (turnId === undefined)
+          throw new ReadingAssistantError('The server returned an invalid answer');
+        setHistory((previous) => ({
+          ...previous,
+          turns: previous.turns.some((turn) => turn.id === turnId)
+            ? previous.turns
+            : [
+                ...previous.turns,
+                {
+                  id: turnId,
+                  chapterIndex,
+                  question: submittedQuestion,
+                  selectedText: passage || null,
+                  answer: result.answer,
+                  sources: result.sources,
+                  status: result.status ?? 'completed',
+                  mode,
+                },
+              ],
+        }));
+        if (result.status !== 'model_unavailable') {
+          setQuestion((draft) => (draft.trim() === submittedQuestion ? '' : draft));
+        }
+      }
+      setConversations((items) =>
+        items.map((item) =>
+          item.id === id && !item.title
+            ? { ...item, title: Array.from(submittedQuestion).slice(0, 40).join('') }
+            : item,
+        ),
+      );
     } catch (cause) {
+      if (activeConversation.current !== id) return;
       setError(
         cause instanceof ReadingAssistantError ? _(cause.message) : _('Could not get an answer.'),
       );
@@ -177,10 +297,82 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
   return (
     <section className='eink-bordered border-base-200 bg-base-100 space-y-3 rounded-lg border p-4'>
       <h3 className='font-semibold'>{_('Reading Assistant')}</h3>
-      {(questionContext?.text || selectedText) && (
-        <blockquote className='border-base-300 text-base-content/70 line-clamp-3 border-s-2 ps-3 text-sm'>
-          {questionContext?.text || selectedText}
-        </blockquote>
+      <div className='flex gap-2'>
+        <select
+          aria-label={_('Conversation')}
+          className='select select-sm min-w-0 flex-1'
+          value={conversationId}
+          disabled={loadingHistory}
+          onChange={(event) => void openConversation(event.target.value)}
+        >
+          {!conversationId && <option value=''>{_('Conversation')}</option>}
+          {conversations.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.title ||
+                _(item.defaultConversation ? 'Default conversation' : 'Untitled conversation')}
+            </option>
+          ))}
+        </select>
+        <button
+          type='button'
+          className='btn btn-sm'
+          disabled={loadingHistory}
+          onClick={() => void openConversation()}
+        >
+          {_('New conversation')}
+        </button>
+      </div>
+      {history.before && (
+        <button
+          type='button'
+          className='btn btn-ghost btn-sm'
+          disabled={loadingHistory}
+          onClick={() => void loadEarlierTurns()}
+        >
+          {_('Load earlier messages')}
+        </button>
+      )}
+      {history.turns.map((turn) => (
+        <article
+          key={turn.id}
+          className='border-base-200 space-y-2 whitespace-pre-wrap border-b pb-2 text-sm'
+        >
+          {turn.selectedText && (
+            <blockquote className='border-base-300 border-s-2 ps-3'>{turn.selectedText}</blockquote>
+          )}
+          <p className='font-medium'>{turn.question}</p>
+          {turn.mode === 'quick' && <p className='text-base-content/70'>{_('Quick')}</p>}
+          <p>{turn.answer}</p>
+          {turn.sources.length > 0 && (
+            <ul aria-label={_('Sources')} className='list-inside list-disc'>
+              {turn.sources.map((source, index) => (
+                <li key={`${index}-${source}`}>{source}</li>
+              ))}
+            </ul>
+          )}
+        </article>
+      ))}
+      {questionContext ? (
+        <div className='border-base-300 space-y-1 border-s-2 ps-3 text-sm'>
+          <div className='flex items-center justify-between gap-2'>
+            <span>
+              {_('Quoted passage · Chapter {{chapter}}', { chapter: questionContext.chapterIndex })}
+            </span>
+            <button className='btn btn-ghost btn-xs' type='button' onClick={clearQuestionContext}>
+              {_('Clear quotation')}
+            </button>
+          </div>
+          <blockquote className='text-base-content/70 line-clamp-3'>
+            {questionContext.text}
+          </blockquote>
+        </div>
+      ) : (
+        !isNotebookPinned &&
+        selectedText && (
+          <blockquote className='border-base-300 text-base-content/70 line-clamp-3 border-s-2 ps-3 text-sm'>
+            {selectedText}
+          </blockquote>
+        )
       )}
       {selectedText && !questionContext && (
         <div className='flex gap-2'>
@@ -209,6 +401,19 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
         }}
         className='space-y-2'
       >
+        <select
+          aria-label={_('Answer mode')}
+          className='select select-sm'
+          value={mode}
+          onChange={(event) => {
+            const next = event.target.value === 'quick' ? 'quick' : 'deep';
+            setMode(next);
+            saveReadingAnswerMode(next);
+          }}
+        >
+          <option value='deep'>{_('Deep')}</option>
+          <option value='quick'>{_('Quick')}</option>
+        </select>
         <label className='sr-only' htmlFor='reading-assistant-question'>
           {_('Ask about this book')}
         </label>
@@ -219,7 +424,11 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
           onChange={(event) => setQuestion(event.target.value)}
           placeholder={_('Ask about this book')}
         />
-        <button type='submit' className='btn btn-contrast' disabled={busy || !question.trim()}>
+        <button
+          type='submit'
+          className='btn btn-contrast'
+          disabled={busy || loadingHistory || !conversationId || !question.trim()}
+        >
           {busy ? _('Thinking...') : _('Ask Reading Assistant')}
         </button>
       </form>
@@ -227,21 +436,6 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
         <p role='alert' className='text-error text-sm'>
           {error}
         </p>
-      )}
-      {result && (
-        <div className='space-y-2 whitespace-pre-wrap text-sm'>
-          <p>{result.answer}</p>
-          {result.sources.length > 0 && (
-            <div>
-              <h4 className='font-medium'>{_('Sources')}</h4>
-              <ul className='list-inside list-disc'>
-                {result.sources.map((source, index) => (
-                  <li key={`${index}-${source}`}>{source}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
       )}
       {annotations.length > 0 && (
         <div className='border-base-200 space-y-2 border-t pt-2 text-sm'>

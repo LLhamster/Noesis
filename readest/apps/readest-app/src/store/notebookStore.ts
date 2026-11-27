@@ -13,6 +13,8 @@ interface NotebookQuestionContext {
 interface NotebookState {
   notebookQuestionContext: NotebookQuestionContext | null;
   openNotebookForQuestion: (context: NotebookQuestionContext) => void;
+  setPinnedNotebookQuestionContext: (context: NotebookQuestionContext) => void;
+  clearNotebookQuestionContext: () => void;
   notebookWidth: string;
   isNotebookVisible: boolean;
   isNotebookPinned: boolean;
@@ -48,6 +50,18 @@ export const useNotebookStore = create<NotebookState>((set, get) => ({
   notebookQuestionContext: null,
   openNotebookForQuestion: (context) =>
     set({ isNotebookVisible: true, notebookActiveTab: 'ai', notebookQuestionContext: context }),
+  setPinnedNotebookQuestionContext: (context) => {
+    const state = get();
+    if (
+      state.isNotebookVisible &&
+      state.isNotebookPinned &&
+      state.notebookActiveTab === 'ai' &&
+      context.text.trim()
+    ) {
+      set({ notebookQuestionContext: context });
+    }
+  },
+  clearNotebookQuestionContext: () => set({ notebookQuestionContext: null }),
   notebookNewAnnotation: null,
   notebookNewHighlightIds: [],
   notebookEditAnnotation: null,

@@ -36,6 +36,10 @@ public class PlannerPromptBuilder {
             param("externalMcpEnabled", request.isExternalMcpEnabled()),
             param("questionJson", json(request.getQuestion())),
             param("callableServers", callableServers));
+        String dialogue = request.getRecentConversationDialogue();
+        if (dialogue != null && !dialogue.isBlank()) {
+            basePrompt += PromptTemplates.render("ai/conversation-history", param("dialogue", dialogue));
+        }
         return appendExperimentalPatch(basePrompt, experimentalPatch);
 
     }

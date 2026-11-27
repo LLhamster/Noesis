@@ -2607,5 +2607,21 @@
   "Show Two Pages": "显示双页",
   "Book Data": "书籍数据",
   "Downloaded read-aloud audio and translations": "已下载的朗读音频和翻译",
-  "Link a Reader": "关联阅读器"
+  "Link a Reader": "关联阅读器",
+  "Ask Reading Assistant": "AI 提问",
+  "Sign in to Reading Assistant in Settings → Integrations.": "请在「设置 → 集成」中登录 Reading Assistant。",
+  "Import this book from Reading Assistant to ask about it.": "请先从 Reading Assistant 导入这本书，再使用 AI 提问。",
+  "Could not connect to Reading Assistant.": "无法连接到 Reading Assistant。",
+  "Conversation": "会话",
+  "Default conversation": "默认会话",
+  "Untitled conversation": "未命名会话",
+  "New conversation": "新建会话",
+  "Load earlier messages": "加载更早的消息",
+  "Could not load conversations.": "无法加载会话。",
+  "Could not open the conversation.": "无法打开会话。",
+  "Clear quotation": "清除引用",
+  "Quoted passage · Chapter {{chapter}}": "本次引用 · 第 {{chapter}} 章",
+  "Answer mode": "回答模式",
+  "Deep": "深度",
+  "Quick": "快速"
 }

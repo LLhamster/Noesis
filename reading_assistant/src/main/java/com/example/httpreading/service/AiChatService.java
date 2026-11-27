@@ -84,7 +84,7 @@ public class AiChatService {
             : executeFreshPlan(request, plan, options);
 
         if (toolExecution.needsConfirmation()) {
-            if (!options.evalMode()) {
+            if (!options.evalMode() && request.getConversationId() == null) {
                 contextManager.appendSnapshot(contextId, userId, "user", request.getQuestion(), requestMetadata(request));
                 contextManager.appendSnapshot(contextId, userId, "assistant", toolExecution.guidance(), Map.of(
                     "type", "mcp_confirmation"));
@@ -112,7 +112,7 @@ public class AiChatService {
             logger.warn("最终回答模型调用失败，返回 model_unavailable。statusCode={}, retryable={}, evidenceCount={}",
                 exception.statusCode(), exception.retryable(), evidence.items().size());
             String unavailableAnswer = modelUnavailableAnswer(exception, evidence);
-            if (!options.evalMode()) {
+            if (!options.evalMode() && request.getConversationId() == null) {
                 contextManager.appendSnapshot(contextId, userId, "user", request.getQuestion(), requestMetadata(request));
                 contextManager.appendSnapshot(contextId, userId, "assistant", unavailableAnswer, Map.of(
                     "type", "model_unavailable",
@@ -132,7 +132,7 @@ public class AiChatService {
         logger.info("AI Plan-and-Execute answer generated. planMode={}, evidenceCount={}",
             plan.executionMode(), evidence.items().size());
 
-        if (!options.evalMode()) {
+        if (!options.evalMode() && request.getConversationId() == null) {
             contextManager.appendSnapshot(contextId, userId, "user", request.getQuestion(), requestMetadata(request));
             contextManager.appendSnapshot(contextId, userId, "assistant", answer, Map.of(
                 "sourceCount", evidence.sources().size(),

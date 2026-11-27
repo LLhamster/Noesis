@@ -11,6 +11,7 @@ public class AiChatResponse {
     private List<String> sources;
     private Integer contextId;
     private String sessionId;
+    private Long conversationTurnId;
     private List<String> memoryRefs;
     private List<String> externalMcpRefs;
     private List<String> externalMcpPlanRefs;
@@ -54,6 +55,15 @@ public class AiChatResponse {
 
     public void setSessionId(String sessionId) {
         this.sessionId = sessionId;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public Long getConversationTurnId() {
+        return conversationTurnId;
+    }
+
+    public void setConversationTurnId(Long conversationTurnId) {
+        this.conversationTurnId = conversationTurnId;
     }
 
     public List<String> getMemoryRefs() {

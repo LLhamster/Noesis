@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const goToMock = vi.fn();
@@ -15,7 +15,13 @@ vi.mock('@/store/readerStore', () => ({
 vi.mock('@/services/readingAssistant/selection', () => ({
   getReadingAssistantSelection: () => 'selected passage',
 }));
-vi.mock('@/services/readingAssistant/ai', () => ({ askReadingAssistant: vi.fn() }));
+vi.mock('@/services/readingAssistant/ai', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/readingAssistant/ai')>()),
+  askReadingAssistant: vi.fn(),
+  listReadingConversations: vi.fn(),
+  getReadingConversation: vi.fn(),
+  createReadingConversation: vi.fn(),
+}));
 vi.mock('@/services/readingAssistant/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/readingAssistant/client')>();
   return {
@@ -46,7 +52,12 @@ vi.mock('@/services/readingAssistant/userState', () => ({
 
 import { useNotebookStore } from '@/store/notebookStore';
 import ReadingAssistantChat from '@/app/reader/components/notebook/ReadingAssistantChat';
-import { askReadingAssistant } from '@/services/readingAssistant/ai';
+import {
+  askReadingAssistant,
+  createReadingConversation,
+  getReadingConversation,
+  listReadingConversations,
+} from '@/services/readingAssistant/ai';
 import {
   createReadingAssistantAnnotation,
   deleteReadingAssistantAnnotation,
@@ -59,6 +70,11 @@ import {
 describe('Reading Assistant reader panel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem('reading-assistant-answer-mode');
+    vi.mocked(listReadingConversations).mockResolvedValue([
+      { id: 'default', title: null, defaultConversation: true },
+    ]);
+    vi.mocked(getReadingConversation).mockResolvedValue({ turns: [], before: null });
   });
   afterEach(() => {
     cleanup();
@@ -68,16 +84,21 @@ describe('Reading Assistant reader panel', () => {
     vi.mocked(askReadingAssistant).mockResolvedValue({
       answer: 'This passage describes the setting.',
       sources: ['Chapter 2'],
+      conversationTurnId: 1,
     });
     render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
 
     fireEvent.change(screen.getByLabelText('Ask about this book'), {
       target: { value: 'What does this mean?' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Reading Assistant' }));
+    const ask = screen.getByRole<HTMLButtonElement>('button', { name: 'Ask Reading Assistant' });
+    await waitFor(() => expect(ask.disabled).toBe(false));
+    fireEvent.click(ask);
 
     await waitFor(() =>
       expect(askReadingAssistant).toHaveBeenCalledWith({
+        conversationId: 'default',
+        mode: 'deep',
         bookId: 22,
         chapterIndex: 2,
         question: 'What does this mean?',
@@ -95,17 +116,25 @@ describe('Reading Assistant reader panel', () => {
         text: 'passage from toolbar',
         chapterIndex: 4,
       });
-      vi.mocked(askReadingAssistant).mockResolvedValue({ answer: 'Answer', sources: [] });
+      vi.mocked(askReadingAssistant).mockResolvedValue({
+        answer: 'Answer',
+        sources: [],
+        conversationTurnId: 1,
+      });
       render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
 
       expect(screen.getByText('passage from toolbar')).toBeTruthy();
       fireEvent.change(screen.getByLabelText('Ask about this book'), {
         target: { value: 'Explain this' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Ask Reading Assistant' }));
+      const ask = screen.getByRole<HTMLButtonElement>('button', { name: 'Ask Reading Assistant' });
+      await waitFor(() => expect(ask.disabled).toBe(false));
+      fireEvent.click(ask);
 
       await waitFor(() =>
         expect(askReadingAssistant).toHaveBeenCalledWith({
+          conversationId: 'default',
+          mode: 'deep',
           bookId: 22,
           chapterIndex: 4,
           question: 'Explain this',
@@ -115,6 +144,123 @@ describe('Reading Assistant reader panel', () => {
     } finally {
       useNotebookStore.getState().setNotebookVisible(false);
     }
+  });
+
+  it('restores the latest conversation and can create and switch conversations', async () => {
+    vi.mocked(getReadingConversation).mockResolvedValueOnce({
+      before: null,
+      turns: [
+        {
+          id: 2,
+          chapterIndex: 1,
+          question: 'Previous question',
+          selectedText: null,
+          answer: 'Previous answer',
+          sources: [],
+          status: 'completed',
+        },
+      ],
+    });
+    vi.mocked(createReadingConversation).mockResolvedValue({
+      id: 'new',
+      title: null,
+      defaultConversation: false,
+    });
+    render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
+    expect(await screen.findByText('Previous answer')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText<HTMLSelectElement>('Conversation').value).toBe('new'),
+    );
+    expect(screen.queryByText('Previous answer')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Conversation'), { target: { value: 'default' } });
+    await waitFor(() => expect(getReadingConversation).toHaveBeenLastCalledWith(22, 'default'));
+  });
+
+  it('replaces the pinned quote without changing the draft or the sent passage', async () => {
+    const store = useNotebookStore.getState();
+    store.openNotebookForQuestion({ bookKey: 'local-book', text: 'First quote', chapterIndex: 2 });
+    store.setNotebookPin(true);
+    let resolveAnswer!: (answer: {
+      answer: string;
+      sources: string[];
+      conversationTurnId: number;
+    }) => void;
+    vi.mocked(askReadingAssistant).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAnswer = resolve;
+      }),
+    );
+
+    try {
+      render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
+      const input = screen.getByLabelText<HTMLTextAreaElement>('Ask about this book');
+      fireEvent.change(input, { target: { value: 'Explain the selected text' } });
+      act(() =>
+        store.setPinnedNotebookQuestionContext({
+          bookKey: 'local-book',
+          text: 'Second quote',
+          chapterIndex: 3,
+        }),
+      );
+      expect(input.value).toBe('Explain the selected text');
+      const ask = screen.getByRole<HTMLButtonElement>('button', { name: 'Ask Reading Assistant' });
+      await waitFor(() => expect(ask.disabled).toBe(false));
+      fireEvent.click(ask);
+      act(() =>
+        store.setPinnedNotebookQuestionContext({
+          bookKey: 'local-book',
+          text: 'Next quote',
+          chapterIndex: 4,
+        }),
+      );
+      expect(askReadingAssistant).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedText: 'Second quote',
+          chapterIndex: 3,
+        }),
+      );
+      await act(async () =>
+        resolveAnswer({ answer: 'Answer', sources: [], conversationTurnId: 7 }),
+      );
+      expect(screen.getByText('Second quote')).toBeTruthy();
+      expect(screen.getByText('Next quote')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Clear quotation' }));
+      expect(screen.queryByText('Next quote')).toBeNull();
+      expect(screen.getByText('Second quote')).toBeTruthy();
+    } finally {
+      cleanup();
+      store.setNotebookPin(false);
+      store.setNotebookVisible(false);
+    }
+  });
+
+  it('switches to quick mode in the same conversation and remembers it after reopening', async () => {
+    vi.mocked(askReadingAssistant).mockResolvedValue({
+      answer: 'Quick answer',
+      sources: [],
+      conversationTurnId: 8,
+    });
+    const panel = <ReadingAssistantChat bookKey='local-book' bookId={22} />;
+    const { unmount } = render(panel);
+    fireEvent.change(screen.getByLabelText('Answer mode'), { target: { value: 'quick' } });
+    fireEvent.change(screen.getByLabelText('Ask about this book'), {
+      target: { value: 'Explain' },
+    });
+    const ask = screen.getByRole<HTMLButtonElement>('button', { name: 'Ask Reading Assistant' });
+    await waitFor(() => expect(ask.disabled).toBe(false));
+    fireEvent.click(ask);
+    expect(await screen.findByText('Quick answer')).toBeTruthy();
+    expect(askReadingAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'default',
+        mode: 'quick',
+      }),
+    );
+    unmount();
+    render(panel);
+    expect(screen.getByLabelText<HTMLSelectElement>('Answer mode').value).toBe('quick');
+    await waitFor(() => expect(getReadingConversation).toHaveBeenLastCalledWith(22, 'default'));
   });
 
   it('syncs CFI reading progress and saves highlighted notes to the user account', async () => {

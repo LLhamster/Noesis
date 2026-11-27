@@ -56,6 +56,12 @@ const Notebook: React.FC = () => {
   const { getViewSettings } = useReaderStore();
   const { activeConversationId } = useAIChatStore();
 
+  useEffect(() => {
+    const { notebookQuestionContext, clearNotebookQuestionContext } = useNotebookStore.getState();
+    if (notebookQuestionContext && notebookQuestionContext.bookKey !== sideBarBookKey) {
+      clearNotebookQuestionContext();
+    }
+  }, [sideBarBookKey]);
   useNotebookDocumentCoordinator(sideBarBookKey);
 
   const isMobile =

@@ -298,27 +298,27 @@ const AIAssistant = ({ bookKey }: AIAssistantProps) => {
   const getBookData = useBookDataStore((s) => s.getBookData);
   const bookData = getBookData(bookKey);
   const bookHash = bookKey.split('-')[0] || '';
-  const [resolvedBookId, setResolvedBookId] = useState<number | null>(() =>
-    getReadingAssistantBookId(bookHash),
-  );
+  const [resolvedBook, setResolvedBook] = useState<{ hash: string; id: number } | null>(null);
 
   useEffect(() => {
-    const cached = getReadingAssistantBookId(bookHash);
-    if (cached !== null) {
-      setResolvedBookId(cached);
-      return;
-    }
+    let active = true;
     void resolveReadingAssistantBookId(bookHash, bookData?.book?.title, bookData?.book?.author)
-      .then((matchedId) => {
-        if (matchedId !== null) setResolvedBookId(matchedId);
+      .then((id) => {
+        if (active && id !== null) setResolvedBook({ hash: bookHash, id });
       })
       .catch(() => {
         // Keep local AI fallback if remote book matching fails.
       });
+    return () => {
+      active = false;
+    };
   }, [bookHash, bookData?.book?.title, bookData?.book?.author]);
 
-  const remoteBookId = getReadingAssistantBookId(bookHash) ?? resolvedBookId;
-  if (remoteBookId) return <ReadingAssistantChat bookKey={bookKey} bookId={remoteBookId} />;
+  const remoteBookId =
+    getReadingAssistantBookId(bookHash) ??
+    (resolvedBook?.hash === bookHash ? resolvedBook.id : null);
+  if (remoteBookId)
+    return <ReadingAssistantChat key={bookKey} bookKey={bookKey} bookId={remoteBookId} />;
 
   const reedyRuntime = settings?.aiSettings?.reedy?.runtime ?? 'mvp';
   const useAgentRuntime =

@@ -22,6 +22,10 @@ public interface BooksRepository extends JpaRepository<Books, Long> {
     Optional<Books> findBySourceHash(String sourceHash);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select book from Books book where book.id = :id")
+    Optional<Books> findBookForConversationUpdate(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select book from Books book where book.id = :id and book.cloudOwnerId = :userId")
     Optional<Books> findOwnedCloudBookForUpdate(Long id, Long userId);
     

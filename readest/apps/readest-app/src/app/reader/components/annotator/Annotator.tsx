@@ -49,7 +49,8 @@ import {
 } from '@/utils/sel';
 import { getPopupBounds, offsetPosition } from '@/utils/insets';
 import { eventDispatcher } from '@/utils/event';
-import { getReadingAssistantBookId } from '@/services/readingAssistant/library';
+import { getReadingAssistantSession } from '@/services/readingAssistant/client';
+import { resolveReadingAssistantBookId } from '@/services/readingAssistant/library';
 import { setReadingAssistantSelection } from '@/services/readingAssistant/selection';
 import { findTocItemBS } from '@/services/nav';
 import { throttle } from '@/utils/throttle';
@@ -198,9 +199,17 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
 
   const [selection, setSelection] = useState<TextSelection | null>(null);
   useEffect(() => {
-    setReadingAssistantSelection(bookKey, selection?.text.trim() ?? '');
+    const text = selection?.text.trim() ?? '';
+    setReadingAssistantSelection(bookKey, text);
+    if (selection && text && useSidebarStore.getState().sideBarBookKey === bookKey) {
+      useNotebookStore.getState().setPinnedNotebookQuestionContext({
+        bookKey,
+        text,
+        chapterIndex: Math.max(1, selection.index + 1),
+      });
+    }
     return () => setReadingAssistantSelection(bookKey, '');
-  }, [bookKey, selection?.text]);
+  }, [bookKey, selection]);
   const [translationEpoch, setTranslationEpoch] = useState(0);
   const [showAnnotPopup, setShowAnnotPopup] = useState(false);
   const [showDictionaryPopup, setShowDictionaryPopup] = useState(false);
@@ -314,8 +323,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const annotPopupMaxWidth = Math.min(useResponsiveSize(300), maxWidth);
   const annotPopupToolSize = useResponsiveSize(44);
   const toolbarToolTypes = getToolbarToolTypes(viewSettings.annotationToolbarItems, canShare);
-  const canAskAboutSelection =
-    !!selection?.text.trim() && getReadingAssistantBookId(bookKey.split('-')[0]!) !== null;
+  const canAskAboutSelection = !!selection?.text.trim();
   const toolbarButtonCount = toolbarToolTypes.length + Number(canAskAboutSelection);
   const highlightOptionsGap = toolbarToolTypes.length <= 4 ? 4 : 8;
   // Three 30px styles, a four- or five-color pill (100px or 122px), and three gaps;
@@ -2681,14 +2689,38 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
     toolButtons.unshift({
       tooltipText: _('Ask Reading Assistant'),
       Icon: RiSparklingLine,
-      onClick: () => {
-        handleDismissPopupAndSelection();
-        setSideBarBookKey(bookKey);
-        openNotebookForQuestion({
-          bookKey,
-          text: selection.text.trim(),
-          chapterIndex: Math.max(1, selection.index + 1),
-        });
+      onClick: async () => {
+        const text = selection.text.trim();
+        const chapterIndex = Math.max(1, selection.index + 1);
+        if (!getReadingAssistantSession()) {
+          eventDispatcher.dispatch('toast', {
+            type: 'warning',
+            message: _('Sign in to Reading Assistant in Settings → Integrations.'),
+          });
+          return;
+        }
+        try {
+          const bookId = await resolveReadingAssistantBookId(
+            bookKey.split('-')[0]!,
+            bookData.book?.title,
+            bookData.book?.author,
+          );
+          if (bookId === null) {
+            eventDispatcher.dispatch('toast', {
+              type: 'warning',
+              message: _('Import this book from Reading Assistant to ask about it.'),
+            });
+            return;
+          }
+          handleDismissPopupAndSelection();
+          setSideBarBookKey(bookKey);
+          openNotebookForQuestion({ bookKey, text, chapterIndex });
+        } catch {
+          eventDispatcher.dispatch('toast', {
+            type: 'warning',
+            message: _('Could not connect to Reading Assistant.'),
+          });
+        }
       },
     });
   }

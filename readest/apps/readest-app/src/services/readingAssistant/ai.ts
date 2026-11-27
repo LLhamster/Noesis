@@ -9,25 +9,62 @@ import {
 export interface ReadingAssistantAnswer {
   answer: string;
   sources: string[];
+  conversationTurnId?: number;
+  status?: string;
 }
 
-export const askReadingAssistant = async (input: {
-  bookId: number;
+export interface ReadingConversation {
+  id: string;
+  title: string | null;
+  defaultConversation: boolean;
+}
+
+export type ReadingAnswerMode = 'quick' | 'deep';
+
+const ANSWER_MODE_KEY = 'reading-assistant-answer-mode';
+
+export const getReadingAnswerMode = (): ReadingAnswerMode => {
+  try {
+    return localStorage.getItem(ANSWER_MODE_KEY) === 'quick' ? 'quick' : 'deep';
+  } catch {
+    return 'deep';
+  }
+};
+
+export const saveReadingAnswerMode = (mode: ReadingAnswerMode) => {
+  try {
+    localStorage.setItem(ANSWER_MODE_KEY, mode);
+  } catch {
+    // The mode is still usable in this panel when storage is unavailable.
+  }
+};
+
+export interface ReadingConversationTurn extends ReadingAssistantAnswer {
+  id: number;
   chapterIndex: number;
   question: string;
-  selectedText?: string;
-}): Promise<ReadingAssistantAnswer> => {
+  selectedText: string | null;
+  status: string;
+  mode?: ReadingAnswerMode;
+}
+
+export interface ReadingConversationPage {
+  turns: ReadingConversationTurn[];
+  before: number | null;
+}
+
+const requestAi = async (path: string, method = 'GET', input?: object): Promise<unknown> => {
   const session = getReadingAssistantSession();
   if (!session) throw new ReadingAssistantError('Please sign in again', 401);
   const fetcher = isTauriAppPlatform() ? tauriFetch : globalThis.fetch.bind(globalThis);
-  const response = await fetcher(`${session.serverUrl}/api/ai/chat`, {
-    method: 'POST',
+  const response = await fetcher(`${session.serverUrl}/api/ai${path}`, {
+    method,
     headers: {
       Authorization: `Bearer ${session.token}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify(input),
+    body: input === undefined ? undefined : JSON.stringify(input),
   });
   if (response.status === 401) {
     clearReadingAssistantSession();
@@ -44,7 +81,35 @@ export const askReadingAssistant = async (input: {
       response.status,
     );
   }
-  const data = result['data'];
+  return result['data'];
+};
+
+const conversationPath = (bookId: number) => `/books/${bookId}/conversations`;
+
+export const listReadingConversations = async (bookId: number): Promise<ReadingConversation[]> =>
+  (await requestAi(conversationPath(bookId))) as ReadingConversation[];
+
+export const createReadingConversation = async (bookId: number): Promise<ReadingConversation> =>
+  (await requestAi(conversationPath(bookId), 'POST')) as ReadingConversation;
+
+export const getReadingConversation = async (
+  bookId: number,
+  id: string,
+  before?: number,
+): Promise<ReadingConversationPage> =>
+  (await requestAi(
+    `${conversationPath(bookId)}/${encodeURIComponent(id)}/turns${before === undefined ? '' : `?before=${before}`}`,
+  )) as ReadingConversationPage;
+
+export const askReadingAssistant = async (input: {
+  bookId: number;
+  chapterIndex: number;
+  question: string;
+  selectedText?: string;
+  conversationId?: string;
+  mode?: ReadingAnswerMode;
+}): Promise<ReadingAssistantAnswer> => {
+  const data = await requestAi('/chat', 'POST', input);
   if (typeof data !== 'object' || data === null) {
     throw new ReadingAssistantError('The server returned an invalid answer');
   }
@@ -57,5 +122,14 @@ export const askReadingAssistant = async (input: {
   ) {
     throw new ReadingAssistantError('The server returned an invalid answer');
   }
-  return { answer: answer['answer'], sources };
+  return {
+    answer: answer['answer'],
+    sources,
+    ...(typeof answer['conversationTurnId'] === 'number'
+      ? {
+          conversationTurnId: answer['conversationTurnId'],
+          status: String(answer['status'] ?? 'completed'),
+        }
+      : {}),
+  };
 };

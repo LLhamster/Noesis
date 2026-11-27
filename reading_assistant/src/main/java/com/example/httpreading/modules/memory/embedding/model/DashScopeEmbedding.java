@@ -116,16 +116,16 @@ public class DashScopeEmbedding implements EmbeddingModel {
                     okhttp3.MediaType.parse("application/json")))
                 .build();
             
-            Response response = httpClient.newCall(request).execute();
-            if (response.code() >= 400) {
-                throw new RuntimeException("Embedding REST 调用失败: " + response.code());
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (response.code() >= 400) {
+                    throw new RuntimeException("Embedding REST 调用失败: " + response.code());
+                }
+
+                String responseBody = response.body().string();
+                JsonObject data = gson.fromJson(responseBody, JsonObject.class);
+                // 解析返回的向量
+                return parseEmbeddings(data);
             }
-            
-            String responseBody = response.body().string();
-            JsonObject data = gson.fromJson(responseBody, JsonObject.class);
-            // 解析返回的向量
-            return parseEmbeddings(data);
-            
         } catch (Exception e) {
             logger.error("REST 模式编码失败", e);
             throw new RuntimeException(e);

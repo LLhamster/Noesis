@@ -2,6 +2,8 @@ package com.example.httpreading.dto;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -21,6 +23,11 @@ public class AiChatRequest {
 
     private String userId;
     private String sessionId;
+    private String conversationId;
+    @jakarta.validation.constraints.Pattern(regexp = "quick|deep", message = "不支持的回答模式")
+    private String mode;
+    @JsonIgnore
+    private String recentConversationDialogue;
     private Integer contextId;
     private Integer topK;
     private Boolean enableMemory;
@@ -177,6 +184,32 @@ public class AiChatRequest {
 
     public void setCustomAnswer(String customAnswer) {
         this.customAnswer = customAnswer;
+    }
+
+    public String getMode() {
+        return mode;
+    }
+
+    public void setMode(String mode) {
+        this.mode = mode;
+    }
+
+    public String getConversationId() {
+        return conversationId;
+    }
+
+    public void setConversationId(String conversationId) {
+        this.conversationId = conversationId;
+    }
+
+    @JsonIgnore
+    public String getRecentConversationDialogue() {
+        return recentConversationDialogue;
+    }
+
+    @JsonIgnore
+    public void setRecentConversationDialogue(String dialogue) {
+        recentConversationDialogue = dialogue;
     }
 
     public String resolvedUserId() {
