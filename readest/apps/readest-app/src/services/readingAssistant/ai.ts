@@ -46,6 +46,7 @@ export interface ReadingConversationTurn extends ReadingAssistantAnswer {
   selectedText: string | null;
   status: string;
   mode?: ReadingAnswerMode;
+  requestId?: string | null;
 }
 
 export interface ReadingConversationPage {
@@ -53,7 +54,12 @@ export interface ReadingConversationPage {
   before: number | null;
 }
 
-const requestAi = async (path: string, method = 'GET', input?: object): Promise<unknown> => {
+const fetchAi = async (
+  path: string,
+  method: string,
+  input?: object,
+  accept = 'application/json',
+) => {
   const session = getReadingAssistantSession();
   if (!session) throw new ReadingAssistantError('Please sign in again', 401);
   const fetcher = isTauriAppPlatform() ? tauriFetch : globalThis.fetch.bind(globalThis);
@@ -62,7 +68,7 @@ const requestAi = async (path: string, method = 'GET', input?: object): Promise<
     headers: {
       Authorization: `Bearer ${session.token}`,
       'Content-Type': 'application/json',
-      Accept: 'application/json',
+      Accept: accept,
     },
     body: input === undefined ? undefined : JSON.stringify(input),
   });
@@ -70,6 +76,11 @@ const requestAi = async (path: string, method = 'GET', input?: object): Promise<
     clearReadingAssistantSession();
     throw new ReadingAssistantError('Please sign in again', 401);
   }
+  return response;
+};
+
+const requestAi = async (path: string, method = 'GET', input?: object): Promise<unknown> => {
+  const response = await fetchAi(path, method, input);
   const envelope: unknown = await response.json();
   if (typeof envelope !== 'object' || envelope === null) {
     throw new ReadingAssistantError('The server returned an invalid answer');
@@ -101,14 +112,18 @@ export const getReadingConversation = async (
     `${conversationPath(bookId)}/${encodeURIComponent(id)}/turns${before === undefined ? '' : `?before=${before}`}`,
   )) as ReadingConversationPage;
 
-export const askReadingAssistant = async (input: {
-  bookId: number;
-  chapterIndex: number;
-  question: string;
-  selectedText?: string;
-  conversationId?: string;
-  mode?: ReadingAnswerMode;
-}): Promise<ReadingAssistantAnswer> => {
+export const askReadingAssistant = async (
+  input: {
+    bookId: number;
+    chapterIndex: number;
+    question: string;
+    selectedText?: string;
+    conversationId?: string;
+    mode?: ReadingAnswerMode;
+  },
+  stream?: ReadingChatStream,
+): Promise<ReadingAssistantAnswer> => {
+  if (stream) return streamAnswer(input, stream);
   const data = await requestAi('/chat', 'POST', input);
   if (typeof data !== 'object' || data === null) {
     throw new ReadingAssistantError('The server returned an invalid answer');
@@ -132,4 +147,73 @@ export const askReadingAssistant = async (input: {
         }
       : {}),
   };
+};
+
+type ReadingChatStream = {
+  id: string;
+  onStage: (stage: string) => void;
+  onDelta: (text: string) => void;
+  onReset: () => void;
+};
+
+const streamPath = (id: string) => `/chat/streams/${encodeURIComponent(id)}`;
+
+export const stopReadingAnswer = async (id: string) => {
+  const response = await fetchAi(streamPath(id), 'DELETE');
+  if (!response.ok) throw new ReadingAssistantError('Could not stop the answer', response.status);
+};
+
+const readStreamEvent = (block: string) => {
+  const data = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).replace(/^ /, ''))
+    .join('\n');
+  return data
+    ? (JSON.parse(data) as {
+        requestId: string;
+        type: string;
+        value?: string | null;
+        result?: ReadingAssistantAnswer | null;
+      })
+    : null;
+};
+
+const streamAnswer = async (
+  input: object,
+  stream: ReadingChatStream,
+): Promise<ReadingAssistantAnswer> => {
+  const response = await fetchAi(streamPath(stream.id), 'POST', input, 'text/event-stream');
+  if (
+    !response.ok ||
+    !response.body ||
+    !response.headers.get('content-type')?.startsWith('text/event-stream')
+  ) {
+    await response.body?.cancel().catch(() => {});
+    throw new ReadingAssistantError('Could not get an answer', response.status);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = '';
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) throw new ReadingAssistantError('The answer connection was interrupted.');
+      pending += decoder.decode(chunk.value, { stream: true });
+      while (true) {
+        const boundary = /\r?\n\r?\n/.exec(pending);
+        if (!boundary) break;
+        const event = readStreamEvent(pending.slice(0, boundary.index));
+        pending = pending.slice(boundary.index + boundary[0].length);
+        if (event?.requestId !== stream.id) continue;
+        if (event.type === 'stage' && typeof event.value === 'string') stream.onStage(event.value);
+        if (event.type === 'delta' && typeof event.value === 'string') stream.onDelta(event.value);
+        if (event.type === 'reset') stream.onReset();
+        if (event.type === 'terminal' && event.result) return event.result;
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
 };

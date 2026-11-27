@@ -10,6 +10,7 @@ import {
   getReadingConversation,
   listReadingConversations,
   saveReadingAnswerMode,
+  stopReadingAnswer,
   type ReadingConversation,
   type ReadingConversationPage,
 } from '@/services/readingAssistant/ai';
@@ -49,7 +50,15 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
   const [history, setHistory] = useState<ReadingConversationPage>({ turns: [], before: null });
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [generation, setGeneration] = useState<{
+    requestId: string;
+    conversationId: string;
+    stage: string;
+    answer: string;
+  } | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const pendingRequest = useRef<string | null>(null);
+  const busy = generation !== null;
   const [savingNote, setSavingNote] = useState(false);
   const lastSyncedCfiRef = useRef<string | null>(null);
 
@@ -234,23 +243,85 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
     }
   };
 
+  const pendingHistory = history.turns.some((turn) => turn.status === 'generating');
+  useEffect(() => {
+    if (!conversationId || !pendingHistory || busy) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const page = await getReadingConversation(bookId, conversationId);
+        if (!active || activeConversation.current !== conversationId) return;
+        setHistory((previous) => {
+          const updated = new Map(page.turns.map((turn) => [turn.id, turn]));
+          const earlier = previous.turns.filter((turn) => !updated.has(turn.id));
+          return {
+            turns: [...earlier, ...page.turns].sort((a, b) => a.id - b.id),
+            before: previous.before,
+          };
+        });
+        if (!page.turns.some((turn) => turn.status === 'generating')) return;
+      } catch {
+        if (!active) return;
+      }
+      timer = setTimeout(refresh, 1500);
+    };
+    timer = setTimeout(refresh, 1000);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [bookId, conversationId, pendingHistory, busy]);
+
+  const stopGeneration = async (requestId: string) => {
+    setStopping(true);
+    try {
+      await stopReadingAnswer(requestId);
+    } catch {
+      setError(_('Could not stop the answer'));
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const submit = async () => {
-    if (!question.trim() || !conversationId || loadingHistory || busy) return;
+    if (!question.trim() || !conversationId || loadingHistory || pendingRequest.current) return;
     const id = conversationId;
     const submittedQuestion = question.trim();
-    setBusy(true);
+    const requestId = crypto.randomUUID();
+    pendingRequest.current = requestId;
+    setGeneration({ requestId, conversationId: id, stage: 'connecting', answer: '' });
     setError('');
     try {
       const passage = questionContext?.text ?? (isNotebookPinned ? '' : getLiveSelection());
       const chapterIndex = questionContext?.chapterIndex ?? Math.max(1, (progress?.index ?? 0) + 1);
-      const result = await askReadingAssistant({
-        conversationId: id,
-        mode,
-        bookId,
-        chapterIndex,
-        question: submittedQuestion,
-        selectedText: passage || undefined,
-      });
+      const result = await askReadingAssistant(
+        {
+          conversationId: id,
+          mode,
+          bookId,
+          chapterIndex,
+          question: submittedQuestion,
+          selectedText: passage || undefined,
+        },
+        {
+          id: requestId,
+          onStage: (stage) =>
+            setGeneration((current) =>
+              current?.requestId === requestId ? { ...current, stage } : current,
+            ),
+          onDelta: (text) =>
+            setGeneration((current) =>
+              current?.requestId === requestId
+                ? { ...current, answer: current.answer + text }
+                : current,
+            ),
+          onReset: () =>
+            setGeneration((current) =>
+              current?.requestId === requestId ? { ...current, answer: '' } : current,
+            ),
+        },
+      );
       if (activeConversation.current === id) {
         const turnId = result.conversationTurnId;
         if (turnId === undefined)
@@ -270,10 +341,11 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
                   sources: result.sources,
                   status: result.status ?? 'completed',
                   mode,
+                  requestId,
                 },
               ],
         }));
-        if (result.status !== 'model_unavailable') {
+        if (!result.status || result.status === 'completed') {
           setQuestion((draft) => (draft.trim() === submittedQuestion ? '' : draft));
         }
       }
@@ -289,9 +361,41 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
       setError(
         cause instanceof ReadingAssistantError ? _(cause.message) : _('Could not get an answer.'),
       );
+      void getReadingConversation(bookId, id)
+        .then((page) => {
+          if (activeConversation.current === id) {
+            setHistory((previous) => ({
+              ...previous,
+              turns: [
+                ...new Map(
+                  [...previous.turns, ...page.turns].map((turn) => [turn.id, turn]),
+                ).values(),
+              ].sort((a, b) => a.id - b.id),
+            }));
+          }
+        })
+        .catch(() => {});
     } finally {
-      setBusy(false);
+      pendingRequest.current = null;
+      setGeneration(null);
     }
+  };
+
+  const currentGeneration = generation?.conversationId === conversationId ? generation : null;
+  const stageLabels: Record<string, string> = {
+    connecting: 'Connecting...',
+    queued: 'Preparing the answer...',
+    planning: 'Planning the answer...',
+    gathering: 'Gathering reading context...',
+    answering: 'Writing the answer...',
+    repairing: 'Revising the answer...',
+  };
+  const terminalLabels: Record<string, string> = {
+    stopped: 'Generation stopped',
+    interrupted: 'Generation interrupted',
+    failed: 'Generation failed',
+    model_unavailable: 'Generation failed',
+    generating: 'Writing the answer...',
   };
 
   return (
@@ -343,6 +447,19 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
           <p className='font-medium'>{turn.question}</p>
           {turn.mode === 'quick' && <p className='text-base-content/70'>{_('Quick')}</p>}
           <p>{turn.answer}</p>
+          {terminalLabels[turn.status] && <p>{_(terminalLabels[turn.status]!)}</p>}
+          {turn.status === 'generating' &&
+            turn.requestId &&
+            turn.requestId !== currentGeneration?.requestId && (
+              <button
+                type='button'
+                className='btn btn-sm'
+                disabled={stopping}
+                onClick={() => void stopGeneration(turn.requestId!)}
+              >
+                {_('Stop generating')}
+              </button>
+            )}
           {turn.sources.length > 0 && (
             <ul aria-label={_('Sources')} className='list-inside list-disc'>
               {turn.sources.map((source, index) => (
@@ -352,6 +469,12 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
           )}
         </article>
       ))}
+      {currentGeneration && (
+        <div className='space-y-2 whitespace-pre-wrap text-sm'>
+          <p role='status'>{_(stageLabels[currentGeneration.stage] ?? 'Writing the answer...')}</p>
+          {currentGeneration.answer && <p>{currentGeneration.answer}</p>}
+        </div>
+      )}
       {questionContext ? (
         <div className='border-base-300 space-y-1 border-s-2 ps-3 text-sm'>
           <div className='flex items-center justify-between gap-2'>
@@ -431,6 +554,16 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
         >
           {busy ? _('Thinking...') : _('Ask Reading Assistant')}
         </button>
+        {currentGeneration && (
+          <button
+            type='button'
+            className='btn btn-sm'
+            disabled={stopping || currentGeneration.stage === 'connecting'}
+            onClick={() => void stopGeneration(currentGeneration.requestId)}
+          >
+            {_('Stop generating')}
+          </button>
+        )}
       </form>
       {error && (
         <p role='alert' className='text-error text-sm'>

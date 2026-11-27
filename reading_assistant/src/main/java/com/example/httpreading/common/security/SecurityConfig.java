@@ -42,6 +42,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
+                .securityContext(context -> context.securityContextRepository(JwtAuthFilter.REQUEST_CONTEXT))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Swagger 放行（重要！）

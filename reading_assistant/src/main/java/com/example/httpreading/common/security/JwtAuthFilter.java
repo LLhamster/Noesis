@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -23,6 +24,8 @@ import jakarta.servlet.http.HttpServletResponse;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     public static final String ATTR_USER_ID = "userId";
+    static final RequestAttributeSecurityContextRepository REQUEST_CONTEXT =
+        new RequestAttributeSecurityContextRepository();
     
     private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
@@ -59,7 +62,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userId, null, java.util.List.of());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                var context = SecurityContextHolder.createEmptyContext();
+                context.setAuthentication(authentication);
+                SecurityContextHolder.setContext(context);
+                REQUEST_CONTEXT.saveContext(context, request, response);
                 log.debug("JWT认证成功 - userId:{}", userId);
             }
         } catch (JwtException | IllegalArgumentException ex) {

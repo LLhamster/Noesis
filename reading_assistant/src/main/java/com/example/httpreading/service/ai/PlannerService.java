@@ -41,16 +41,22 @@ public class PlannerService {
     }
 
     public ChatPlan plan(AiChatRequest request, PromptOverride promptOverride) {
+        return plan(request, promptOverride, null);
+    }
+
+    public ChatPlan plan(AiChatRequest request, PromptOverride promptOverride, ChatStream stream) {
         AiChatRequest safeRequest = request == null ? new AiChatRequest() : request;
         String question = normalize(safeRequest.getQuestion());
         try {
             PromptOverride override = promptOverride == null ? PromptOverride.none() : promptOverride;
             String prompt = promptBuilder.build(safeRequest, override.plannerPatch());
             logPrompt("PLANNER", prompt);
-            String raw = modelClient.chat(prompt);
+            String raw = stream == null ? modelClient.chat(prompt)
+                : modelClient.chat(prompt, ModelClient.ChatOptions.defaults(), stream);
             LlmPlanResponse response = parse(raw);
             return planValidator.validateAndConvert(response, question);
         } catch (Exception ex) {
+            if (stream != null) stream.checkActive();
             if (PlannerIntentClassifier.requiresUnavailableExternalTool(question)) {
                 if (safeRequest.isExternalMcpEnabled() && hasMatchingExternalMcpServer(question)) {
                     log.warn("LLM Planner 失败，问题需要外部 MCP，回退到 MCP server router。reason={}", ex.getMessage());

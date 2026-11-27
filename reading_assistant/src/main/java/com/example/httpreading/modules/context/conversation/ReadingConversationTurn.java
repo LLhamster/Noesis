@@ -15,6 +15,9 @@ public class ReadingConversationTurn {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
     String conversationId;
+    @jakarta.persistence.Column(unique = true, length = 36)
+    String requestId;
+    java.time.Instant streamDeadline;
     Integer chapterIndex;
     @Lob
     String question;

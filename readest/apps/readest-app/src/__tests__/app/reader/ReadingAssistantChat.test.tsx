@@ -18,6 +18,7 @@ vi.mock('@/services/readingAssistant/selection', () => ({
 vi.mock('@/services/readingAssistant/ai', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/services/readingAssistant/ai')>()),
   askReadingAssistant: vi.fn(),
+  stopReadingAnswer: vi.fn(),
   listReadingConversations: vi.fn(),
   getReadingConversation: vi.fn(),
   createReadingConversation: vi.fn(),
@@ -57,6 +58,7 @@ import {
   createReadingConversation,
   getReadingConversation,
   listReadingConversations,
+  stopReadingAnswer,
 } from '@/services/readingAssistant/ai';
 import {
   createReadingAssistantAnnotation,
@@ -96,14 +98,17 @@ describe('Reading Assistant reader panel', () => {
     fireEvent.click(ask);
 
     await waitFor(() =>
-      expect(askReadingAssistant).toHaveBeenCalledWith({
-        conversationId: 'default',
-        mode: 'deep',
-        bookId: 22,
-        chapterIndex: 2,
-        question: 'What does this mean?',
-        selectedText: 'selected passage',
-      }),
+      expect(askReadingAssistant).toHaveBeenCalledWith(
+        {
+          conversationId: 'default',
+          mode: 'deep',
+          bookId: 22,
+          chapterIndex: 2,
+          question: 'What does this mean?',
+          selectedText: 'selected passage',
+        },
+        expect.any(Object),
+      ),
     );
     expect(await screen.findByText('This passage describes the setting.')).toBeTruthy();
     expect(screen.getByText('Chapter 2')).toBeTruthy();
@@ -132,14 +137,17 @@ describe('Reading Assistant reader panel', () => {
       fireEvent.click(ask);
 
       await waitFor(() =>
-        expect(askReadingAssistant).toHaveBeenCalledWith({
-          conversationId: 'default',
-          mode: 'deep',
-          bookId: 22,
-          chapterIndex: 4,
-          question: 'Explain this',
-          selectedText: 'passage from toolbar',
-        }),
+        expect(askReadingAssistant).toHaveBeenCalledWith(
+          {
+            conversationId: 'default',
+            mode: 'deep',
+            bookId: 22,
+            chapterIndex: 4,
+            question: 'Explain this',
+            selectedText: 'passage from toolbar',
+          },
+          expect.any(Object),
+        ),
       );
     } finally {
       useNotebookStore.getState().setNotebookVisible(false);
@@ -219,6 +227,7 @@ describe('Reading Assistant reader panel', () => {
           selectedText: 'Second quote',
           chapterIndex: 3,
         }),
+        expect.any(Object),
       );
       await act(async () =>
         resolveAnswer({ answer: 'Answer', sources: [], conversationTurnId: 7 }),
@@ -256,11 +265,45 @@ describe('Reading Assistant reader panel', () => {
         conversationId: 'default',
         mode: 'quick',
       }),
+      expect.any(Object),
     );
     unmount();
     render(panel);
     expect(screen.getByLabelText<HTMLSelectElement>('Answer mode').value).toBe('quick');
     await waitFor(() => expect(getReadingConversation).toHaveBeenLastCalledWith(22, 'default'));
+  });
+
+  it('shows streamed text and stops the current generation without dropping the partial answer', async () => {
+    let complete!: (answer: {
+      answer: string;
+      sources: string[];
+      conversationTurnId: number;
+      status: string;
+    }) => void;
+    vi.mocked(askReadingAssistant).mockImplementationOnce((_input, stream) => {
+      stream?.onStage('answering');
+      stream?.onDelta('Partial answer');
+      return new Promise((resolve) => {
+        complete = resolve;
+      });
+    });
+    vi.mocked(stopReadingAnswer).mockImplementationOnce(async () => {
+      complete({ answer: 'Partial answer', sources: [], conversationTurnId: 9, status: 'stopped' });
+    });
+    render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
+    fireEvent.change(screen.getByLabelText('Ask about this book'), {
+      target: { value: 'Explain' },
+    });
+    const ask = screen.getByRole<HTMLButtonElement>('button', { name: 'Ask Reading Assistant' });
+    await waitFor(() => expect(ask.disabled).toBe(false));
+    fireEvent.click(ask);
+    expect(await screen.findByText('Partial answer')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop generating' }));
+    expect(await screen.findByText('Generation stopped')).toBeTruthy();
+    expect(screen.getByText('Partial answer')).toBeTruthy();
+    expect(stopReadingAnswer).toHaveBeenCalledWith(
+      vi.mocked(askReadingAssistant).mock.calls[0]?.[1]?.id,
+    );
   });
 
   it('syncs CFI reading progress and saves highlighted notes to the user account', async () => {

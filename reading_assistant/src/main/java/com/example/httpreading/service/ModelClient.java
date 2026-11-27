@@ -1,6 +1,7 @@
 package com.example.httpreading.service;
 
 import okhttp3.*;
+import com.example.httpreading.service.ai.ChatStream;
 import okio.BufferedSink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,12 +53,17 @@ public class ModelClient {
     }
 
     public String chat(String question, ChatOptions options) {
+        return chat(question, options, null);
+    }
+
+    public String chat(String question, ChatOptions options, ChatStream stream) {
         ChatOptions resolvedOptions = options == null ? ChatOptions.defaults() : options;
         ModelClientException lastException = null;
         for (int attempt = 1; attempt <= MAX_CHAT_ATTEMPTS; attempt++) {
             try {
-                return doChat(question, attempt, resolvedOptions, HTTP_CLIENT);
+                return doChat(question, attempt, resolvedOptions, HTTP_CLIENT, stream);
             } catch (ModelClientException exception) {
+                if (stream != null) stream.checkActive();
                 lastException = exception;
                 if (!exception.retryable() || attempt >= MAX_CHAT_ATTEMPTS) {
                     throw exception;
@@ -72,7 +78,7 @@ public class ModelClient {
 
     public String chatOnce(String question) {
         try {
-            String answer = doChat(question, 1, ChatOptions.defaults(), SINGLE_ATTEMPT_CLIENT);
+            String answer = doChat(question, 1, ChatOptions.defaults(), SINGLE_ATTEMPT_CLIENT, null);
             if (answer.isBlank()) {
                 throw new ModelClientException("模型未返回回答", -1, false);
             }
@@ -82,7 +88,8 @@ public class ModelClient {
         }
     }
 
-    private String doChat(String question, int attempt, ChatOptions options, OkHttpClient client) {
+    private String doChat(String question, int attempt, ChatOptions options,
+                          OkHttpClient client, ChatStream stream) {
         try {
             JSONObject root = new JSONObject();
             root.put("model", chatModel());
@@ -109,9 +116,10 @@ public class ModelClient {
                 builder.addHeader("Authorization", "Bearer " + apiKey);
             }
 
-            Request request = builder.build();
+            Call call = client.newCall(builder.build());
+            if (stream != null) stream.attach(call);
             String raw;
-            try (Response response = client.newCall(request).execute()) {
+            try (Response response = call.execute()) {
                 raw = response.body() == null ? "" : response.body().string();
                 if (!response.isSuccessful()) {
                     boolean retryable = isRetryableStatus(response.code());
@@ -122,6 +130,8 @@ public class ModelClient {
                         response.code(),
                         retryable);
                 }
+            } finally {
+                if (stream != null) stream.detach(call);
             }
 
             log.debug("模型原始返回: {}", truncateLog(raw));
@@ -142,6 +152,60 @@ public class ModelClient {
         } catch (IOException e) {
             log.warn("调用模型接口异常: {}", e.getMessage());
             throw new ModelClientException("调用模型接口异常: " + e.getMessage(), -1, true, e);
+        }
+    }
+
+    public String streamChat(String prompt, ChatStream stream) {
+        JSONObject message = new JSONObject().put("role", "user").put("content", prompt);
+        JSONObject payload = new JSONObject().put("model", chatModel())
+            .put("messages", new JSONArray().put(message)).put("stream", true);
+        RequestBody body = oneShot(RequestBody.create(MediaType.parse("application/json"), payload.toString()));
+        Request.Builder builder = new Request.Builder().url(chatUrl()).post(body)
+            .header("Accept", "text/event-stream");
+        if (apiKey != null && !apiKey.isBlank()) {
+            builder.header("Authorization", "Bearer " + apiKey);
+        }
+        Call call = SINGLE_ATTEMPT_CLIENT.newCall(builder.build());
+        stream.attach(call);
+        try (Response response = call.execute()) {
+            ResponseBody responseBody = response.body();
+            if (!response.isSuccessful() || responseBody == null) {
+                throw new ModelClientException("模型流式请求失败", response.code(), false);
+            }
+            StringBuilder answer = new StringBuilder();
+            String line;
+            boolean ended = false;
+            var source = responseBody.source();
+            while ((line = source.readUtf8Line()) != null) {
+                stream.checkActive();
+                if (!line.startsWith("data:")) continue;
+                String data = line.substring(5).trim();
+                if ("[DONE]".equals(data)) {
+                    ended = true;
+                    break;
+                }
+                JSONObject chunk = new JSONObject(data);
+                if (chunk.has("error")) {
+                    throw new ModelClientException("模型流式响应错误", -1, false);
+                }
+                JSONArray choices = chunk.optJSONArray("choices");
+                if (choices == null || choices.isEmpty()) continue;
+                JSONObject delta = choices.getJSONObject(0).optJSONObject("delta");
+                String text = delta == null ? "" : delta.optString("content", "");
+                if (!text.isEmpty()) {
+                    answer.append(text);
+                    stream.delta(text);
+                }
+            }
+            if (!ended || answer.toString().isBlank()) {
+                throw new ModelClientException("模型未返回完整回答", -1, false);
+            }
+            return answer.toString();
+        } catch (IOException | JSONException error) {
+            stream.checkActive();
+            throw new ModelClientException("读取模型流式响应失败", -1, false, error);
+        } finally {
+            stream.detach(call);
         }
     }
 

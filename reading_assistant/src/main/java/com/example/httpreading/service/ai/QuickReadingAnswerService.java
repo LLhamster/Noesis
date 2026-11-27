@@ -33,6 +33,10 @@ public class QuickReadingAnswerService {
     }
 
     public AiChatResponse answer(AiChatRequest request) {
+        return answer(request, null);
+    }
+
+    public AiChatResponse answer(AiChatRequest request, ChatStream stream) {
         String selection = limit(request.getSelectedText(), 4000);
         String excerpt = chapters.findByBookIdAndChapterIndex(request.getBookId(), request.getChapterIndex())
             .map(chapter -> {
@@ -59,7 +63,8 @@ public class QuickReadingAnswerService {
             param("profile", profile));
         AiChatResponse response;
         try {
-            String answer = model.chatOnce(prompt);
+            if (stream != null) stream.stage("answering");
+            String answer = stream == null ? model.chatOnce(prompt) : model.streamChat(prompt, stream);
             List<String> sources = selection.isBlank() && excerpt.isBlank()
                 ? List.of() : List.of("第 " + request.getChapterIndex() + " 章");
             response = new AiChatResponse(answer, sources);

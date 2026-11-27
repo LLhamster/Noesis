@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ReadingConversationService {
+    public static final long STREAM_TIMEOUT_MS = 300_000L;
     private static final int PAGE_SIZE = 20;
     private static final int CONTEXT_CHARS = 12000;
 
@@ -86,25 +87,51 @@ public class ReadingConversationService {
     @Transactional
     public Long saveTurn(Long userId, AiChatRequest request, AiChatResponse response) {
         ReadingConversation conversation = requireConversation(userId, request.getBookId(), request.getConversationId());
+        ReadingConversationTurn turn = createTurn(conversation, request);
+        applyResponse(turn, response);
+        return turns.save(turn).id;
+    }
+
+    @Transactional
+    public Long startStream(Long userId, AiChatRequest request, String requestId) {
+        ReadingConversation conversation = requireConversation(userId, request.getBookId(), request.getConversationId());
+        ReadingConversationTurn turn = createTurn(conversation, request);
+        turn.requestId = requestId;
+        applyResponse(turn, new AiChatResponse("", List.of()));
+        turn.status = "generating";
+        turn.streamDeadline = Instant.now().plusMillis(STREAM_TIMEOUT_MS + 5000);
+        return turns.save(turn).id;
+    }
+
+    @Transactional
+    public void finishStream(Long turnId, AiChatResponse response) {
+        ReadingConversationTurn turn = turns.findById(turnId).orElseThrow();
+        if ("generating".equals(turn.status)) applyResponse(turn, response);
+    }
+
+    private static ReadingConversationTurn createTurn(ReadingConversation conversation, AiChatRequest request) {
         ReadingConversationTurn turn = new ReadingConversationTurn();
         turn.conversationId = conversation.id;
         turn.chapterIndex = request.getChapterIndex();
         turn.question = request.getQuestion();
         turn.selectedText = request.getSelectedText();
+        turn.mode = "quick".equals(request.getMode()) ? "quick" : "deep";
+        if (conversation.title == null) {
+            String question = request.getQuestion().strip();
+            int length = Math.min(40, question.codePointCount(0, question.length()));
+            conversation.title = question.substring(0, question.offsetByCodePoints(0, length));
+        }
+        return turn;
+    }
+
+    private void applyResponse(ReadingConversationTurn turn, AiChatResponse response) {
         turn.answer = response.getAnswer();
         turn.status = response.getStatus();
-        turn.mode = "quick".equals(request.getMode()) ? "quick" : "deep";
         try {
             turn.sourcesJson = json.writeValueAsString(response.getSources() == null ? List.of() : response.getSources());
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("Cannot store answer sources", error);
         }
-        Long turnId = turns.save(turn).id;
-        if (conversation.title == null) {
-            String question = request.getQuestion().strip();
-            conversation.title = question.substring(0, question.offsetByCodePoints(0, Math.min(40, question.codePointCount(0, question.length()))));
-        }
-        return turnId;
     }
 
     private ReadingConversation requireConversation(Long userId, Long bookId, String id) {
@@ -136,7 +163,13 @@ public class ReadingConversationService {
     private TurnView viewTurn(ReadingConversationTurn turn) {
         try {
             List<String> sources = json.readValue(turn.sourcesJson, new TypeReference<>() {});
-            return new TurnView(turn.id, turn.chapterIndex, turn.question, turn.selectedText, turn.answer, sources, turn.status, turn.mode == null ? "deep" : turn.mode);
+            String status = turn.status;
+            if ("generating".equals(status) && turn.streamDeadline != null
+                && Instant.now().isAfter(turn.streamDeadline)) {
+                status = "interrupted";
+            }
+            return new TurnView(turn.id, turn.chapterIndex, turn.question, turn.selectedText, turn.answer,
+                sources, status, turn.mode == null ? "deep" : turn.mode, turn.requestId);
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("Cannot read answer sources", error);
         }
@@ -144,6 +177,6 @@ public class ReadingConversationService {
 
     public record ConversationView(String id, String title, boolean defaultConversation) {}
     public record TurnView(Long id, Integer chapterIndex, String question, String selectedText,
-                           String answer, List<String> sources, String status, String mode) {}
+                           String answer, List<String> sources, String status, String mode, String requestId) {}
     public record HistoryPage(List<TurnView> turns, Long before) {}
 }

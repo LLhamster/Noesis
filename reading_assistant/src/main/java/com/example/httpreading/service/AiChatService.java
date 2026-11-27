@@ -11,6 +11,7 @@ import com.example.httpreading.modules.mcp.ExternalMcpAgentService;
 import com.example.httpreading.modules.cognition.messaging.LearningEventPublisher;
 import com.example.httpreading.service.RagService.RagAnswer;
 import com.example.httpreading.service.ai.ChatPlan;
+import com.example.httpreading.service.ai.ChatStream;
 import com.example.httpreading.service.ai.AiChatExecutionResult;
 import com.example.httpreading.service.ai.CollectedEvidence;
 import com.example.httpreading.service.ai.EvidenceAggregator;
@@ -61,7 +62,16 @@ public class AiChatService {
         return execute(request, EvolutionExecutionOptions.production()).response();
     }
 
+    public AiChatResponse streamChat(AiChatRequest request, ChatStream stream) {
+        return execute(request, EvolutionExecutionOptions.production(), stream).response();
+    }
+
     public AiChatExecutionResult execute(AiChatRequest request, EvolutionExecutionOptions executionOptions) {
+        return execute(request, executionOptions, null);
+    }
+
+    private AiChatExecutionResult execute(AiChatRequest request, EvolutionExecutionOptions executionOptions,
+                                          ChatStream stream) {
         EvolutionExecutionOptions options = executionOptions == null
             ? EvolutionExecutionOptions.production()
             : executionOptions;
@@ -76,13 +86,21 @@ public class AiChatService {
             contextManager.putVariable(contextId, "lastQuestion", request.getQuestion(), "user", 1.0d);
         }
 
-        ChatPlan plan = options.evalMode()
-            ? plannerService.plan(request, options.promptOverride())
-            : plannerService.plan(request);
+        if (stream != null) stream.stage("planning");
+        ChatPlan plan;
+        if (stream != null) {
+            plan = plannerService.plan(request, options.promptOverride(), stream);
+        } else {
+            plan = options.evalMode()
+                ? plannerService.plan(request, options.promptOverride())
+                : plannerService.plan(request);
+        }
+        if (stream != null) stream.stage("gathering");
         ToolExecutionResult toolExecution = request.hasConfirmationId()
             ? mcpToolOrchestrator.resume(request, plan)
             : executeFreshPlan(request, plan, options);
 
+        if (stream != null) stream.checkActive();
         if (toolExecution.needsConfirmation()) {
             if (!options.evalMode() && request.getConversationId() == null) {
                 contextManager.appendSnapshot(contextId, userId, "user", request.getQuestion(), requestMetadata(request));
@@ -105,9 +123,14 @@ public class AiChatService {
         CollectedEvidence evidence = evidenceAggregator.aggregate(request, plan, toolExecution);
         String answer;
         try {
-            answer = options.evalMode()
-                ? finalAnswerService.answer(request, plan, evidence, options.promptOverride())
-                : finalAnswerService.answer(request, plan, evidence);
+            if (stream != null) {
+                stream.stage("answering");
+                answer = finalAnswerService.streamAnswer(request, plan, evidence, stream);
+            } else {
+                answer = options.evalMode()
+                    ? finalAnswerService.answer(request, plan, evidence, options.promptOverride())
+                    : finalAnswerService.answer(request, plan, evidence);
+            }
         } catch (ModelClientException exception) {
             logger.warn("最终回答模型调用失败，返回 model_unavailable。statusCode={}, retryable={}, evidenceCount={}",
                 exception.statusCode(), exception.retryable(), evidence.items().size());
@@ -129,6 +152,7 @@ public class AiChatService {
             response.setStatus("model_unavailable");
             return new AiChatExecutionResult(response, plan);
         }
+        if (stream != null) stream.checkActive();
         logger.info("AI Plan-and-Execute answer generated. planMode={}, evidenceCount={}",
             plan.executionMode(), evidence.items().size());
 

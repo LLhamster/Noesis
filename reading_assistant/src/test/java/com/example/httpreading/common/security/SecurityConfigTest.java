@@ -77,8 +77,28 @@ class SecurityConfigTest {
             .andExpect(status().isOk());
     }
 
+    @Test
+    void authenticatedStreamingResponseCanFinishAsyncDispatch() throws Exception {
+        org.mockito.Mockito.when(jwtService.getUserId("valid")).thenReturn(42L);
+        var result = mockMvc.perform(get("/api/ai/chat/streams/probe")
+                .header("Authorization", "Bearer valid"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.request().asyncStarted())
+            .andReturn();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(result))
+            .andExpect(status().isOk());
+    }
+
     @RestController
     static class ProbeController {
+        @GetMapping(path = "/api/ai/chat/streams/probe", produces = "text/event-stream")
+        org.springframework.web.servlet.mvc.method.annotation.SseEmitter stream() throws Exception {
+            var emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter();
+            emitter.send("done");
+            emitter.complete();
+            return emitter;
+        }
+
+
         @GetMapping({
             "/api/ai/probe",
             "/api/admin/probe",

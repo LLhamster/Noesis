@@ -64,6 +64,31 @@ class ReadingConversationPersistenceTest {
         assertEquals(original, service.list(42L, book).get(0).id());
     }
 
+    @Test
+    void streamingTurnCanBeRecoveredAndStoppedTurnsStayOutOfContext() {
+        Long book = createBook();
+        String conversation = service.list(42L, book).get(0).id();
+        var request = new AiChatRequest();
+        request.setBookId(book);
+        request.setConversationId(conversation);
+        request.setChapterIndex(2);
+        request.setQuestion("正在提问");
+        String requestId = java.util.UUID.randomUUID().toString();
+        Long turnId = service.startStream(42L, request, requestId);
+        var generating = service.open(42L, book, conversation, null).turns().get(0);
+        assertEquals("generating", generating.status());
+        assertEquals(requestId, generating.requestId());
+
+        var stopped = new AiChatResponse("已收到的文字", List.of());
+        stopped.setStatus("stopped");
+        service.finishStream(turnId, stopped);
+        service.finishStream(turnId, new AiChatResponse("迟到的结果", List.of()));
+        var restored = service.open(42L, book, conversation, null).turns().get(0);
+        assertEquals("stopped", restored.status());
+        assertEquals("已收到的文字", restored.answer());
+        assertEquals("", service.recentDialogue(42L, book, conversation));
+    }
+
     private String listAfter(CountDownLatch start, Long book) {
         try {
             if (!start.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("Timed out");

@@ -55,6 +55,18 @@ public class FinalAnswerService {
         return chat(repairPrompt, options);
     }
 
+    public String streamAnswer(AiChatRequest request, ChatPlan plan, CollectedEvidence evidence,
+                               ChatStream stream) {
+        String prompt = buildPrompt(request, plan, evidence);
+        String answer = modelClient.streamChat(prompt, stream);
+        stream.checkActive();
+        String issue = qualityIssue(plan, evidence, answer);
+        if (issue.isBlank()) return answer;
+        stream.stage("repairing");
+        stream.reset();
+        return modelClient.streamChat(repairPrompt(prompt, answer, issue, plan), stream);
+    }
+
     private String chat(String prompt, ModelClient.ChatOptions options) {
         return options.temperature() == null
             ? modelClient.chat(prompt)
