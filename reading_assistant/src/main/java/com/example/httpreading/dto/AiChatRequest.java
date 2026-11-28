@@ -37,6 +37,10 @@ public class AiChatRequest {
     private String chapterTitle;
     private String chapterContent;
     private String selectedText;
+    @jakarta.validation.constraints.Size(max = 4096)
+    private String quoteCfi;
+    @jakarta.validation.constraints.Size(max = 128)
+    private String bookFingerprint;
     private String selectedContext;
     private String confirmationId;
     private String selectedOptionId;
@@ -144,6 +148,22 @@ public class AiChatRequest {
 
     public void setChapterContent(String chapterContent) {
         this.chapterContent = chapterContent;
+    }
+
+    public String getQuoteCfi() {
+        return quoteCfi;
+    }
+
+    public void setQuoteCfi(String quoteCfi) {
+        this.quoteCfi = quoteCfi;
+    }
+
+    public String getBookFingerprint() {
+        return bookFingerprint;
+    }
+
+    public void setBookFingerprint(String bookFingerprint) {
+        this.bookFingerprint = bookFingerprint;
     }
 
     public String getSelectedText() {

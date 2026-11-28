@@ -206,6 +206,8 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
         bookKey,
         text,
         chapterIndex: Math.max(1, selection.index + 1),
+        quoteCfi: selection.cfi,
+        bookFingerprint: bookData.book?.hash,
       });
     }
     return () => setReadingAssistantSelection(bookKey, '');
@@ -2714,7 +2716,13 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
           }
           handleDismissPopupAndSelection();
           setSideBarBookKey(bookKey);
-          openNotebookForQuestion({ bookKey, text, chapterIndex });
+          openNotebookForQuestion({
+            bookKey,
+            text,
+            chapterIndex,
+            quoteCfi: selection.cfi,
+            bookFingerprint: bookData.book?.hash,
+          });
         } catch {
           eventDispatcher.dispatch('toast', {
             type: 'warning',

@@ -8,6 +8,8 @@ interface NotebookQuestionContext {
   bookKey: string;
   text: string;
   chapterIndex: number;
+  quoteCfi?: string;
+  bookFingerprint?: string;
 }
 
 interface NotebookState {

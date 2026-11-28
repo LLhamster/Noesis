@@ -18,6 +18,10 @@ public class ReadingConversationTurn {
     @jakarta.persistence.Column(unique = true, length = 36)
     String requestId;
     java.time.Instant streamDeadline;
+    @jakarta.persistence.Column(length = 4096)
+    String quoteCfi;
+    @jakarta.persistence.Column(length = 128)
+    String bookFingerprint;
     Integer chapterIndex;
     @Lob
     String question;

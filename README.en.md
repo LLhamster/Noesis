@@ -11,7 +11,7 @@
 <p>
   <a href="#quick-start">Quick start</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="reading_assistant/VERSION">v0.3.4</a>
+  <a href="reading_assistant/VERSION">v0.3.5</a>
 </p>
 
 </div>
@@ -40,7 +40,7 @@ Noesis is an intelligent reading and memory system built on [Readest](readest/RE
 | Batch cloud import | Select **+ → Import to cloud** in the library and choose multiple EPUBs. Readest checks each book for duplicates and reports imports, skips, and failures. |
 | Cross-device library | Enable Google Drive sync to add cloud imports to the regular Readest library. Other devices can sync the catalog and download books on demand. |
 | Source-grounded AI assistance | Prepare an AI index for a cloud book in the remote library. In the reader, open **Notebook → AI** to ask about a chapter or selected text and see the retrieved sources. |
-| Continuous conversations and streaming answers | Save and switch conversations per book, pin the panel for successive selections, choose quick or deep mode, and stop an answer while it streams. |
+| Continuous conversations and streaming answers | Save and switch conversations per book, pin the panel for successive selections, choose quick or deep mode, stop an answer while it streams, and jump from a historical quote to the text and back. |
 | Account-linked notes | Edit or delete notes in the AI panel. Reopening the book loads the notes for your account and preserves their locations in the text. |
 
 ## Architecture
@@ -101,11 +101,11 @@ Noesis maintains the client and backend in a single Git repository.
 
 | Area | Status |
 | :--- | :--- |
-| Current integration version | `v0.3.4`, with streaming answers, stop controls, and conversation history recovery |
-| Code verification | 10 targeted client tests and 58 related backend tests passed; TypeScript and lint passed. See the version record for full client suite results. |
-| End-to-end acceptance | Live-model first-token and total latency, macOS streaming/stop/disconnection recovery, Google Drive batch uploads, and two-device sync still need testing |
+| Current integration version | `v0.3.5`, with historical quote navigation, chapter fallback, and return to the previous reading position |
+| Code verification | 64 related client tests and 12 related backend tests passed; TypeScript and lint passed. See the version record for full client suite results. |
+| End-to-end acceptance | Live-model first-token and total latency, macOS streaming and quote navigation, cross-device quote recovery, Google Drive batch uploads, and two-device sync still need testing |
 
-[Version marker](reading_assistant/VERSION) · [v0.3.4 delivery and verification record (Chinese)](readest/docs/reading-assistant/v0.3.4.md)
+[Version marker](reading_assistant/VERSION) · [v0.3.5 delivery and verification record (Chinese)](readest/docs/reading-assistant/v0.3.5.md)
 
 ## Credits and license
 

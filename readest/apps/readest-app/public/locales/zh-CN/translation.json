@@ -2634,5 +2634,10 @@
   "Writing the answer...": "正在生成回答…",
   "Revising the answer...": "正在修订回答…",
   "Could not stop the answer": "无法停止生成",
-  "The answer connection was interrupted.": "回答连接已中断。"
+  "The answer connection was interrupted.": "回答连接已中断。",
+  "Open quoted passage": "跳回引用原文",
+  "Return to reading position": "返回阅读位置",
+  "Opened the chapter. The exact passage could not be located.": "已打开对应章节，未能精确定位原文。",
+  "Could not open the quoted passage. The saved text is still available.": "无法打开引用位置，仍可查看已保存的原文。",
+  "Could not return to the previous reading position.": "无法返回先前的阅读位置。"
 }

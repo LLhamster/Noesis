@@ -115,6 +115,8 @@ public class ReadingConversationService {
         turn.chapterIndex = request.getChapterIndex();
         turn.question = request.getQuestion();
         turn.selectedText = request.getSelectedText();
+        turn.quoteCfi = request.getQuoteCfi();
+        turn.bookFingerprint = request.getBookFingerprint();
         turn.mode = "quick".equals(request.getMode()) ? "quick" : "deep";
         if (conversation.title == null) {
             String question = request.getQuestion().strip();
@@ -169,7 +171,8 @@ public class ReadingConversationService {
                 status = "interrupted";
             }
             return new TurnView(turn.id, turn.chapterIndex, turn.question, turn.selectedText, turn.answer,
-                sources, status, turn.mode == null ? "deep" : turn.mode, turn.requestId);
+                sources, status, turn.mode == null ? "deep" : turn.mode, turn.requestId,
+                turn.quoteCfi, turn.bookFingerprint);
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("Cannot read answer sources", error);
         }
@@ -177,6 +180,7 @@ public class ReadingConversationService {
 
     public record ConversationView(String id, String title, boolean defaultConversation) {}
     public record TurnView(Long id, Integer chapterIndex, String question, String selectedText,
-                           String answer, List<String> sources, String status, String mode, String requestId) {}
+                           String answer, List<String> sources, String status, String mode, String requestId,
+                           String quoteCfi, String bookFingerprint) {}
     public record HistoryPage(List<TurnView> turns, Long before) {}
 }

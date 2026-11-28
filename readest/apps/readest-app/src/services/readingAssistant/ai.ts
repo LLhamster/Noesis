@@ -1,3 +1,4 @@
+import type { ReadingQuoteLocation } from './quoteNavigation';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { isTauriAppPlatform } from '@/services/environment';
 import {
@@ -39,7 +40,7 @@ export const saveReadingAnswerMode = (mode: ReadingAnswerMode) => {
   }
 };
 
-export interface ReadingConversationTurn extends ReadingAssistantAnswer {
+export interface ReadingConversationTurn extends ReadingAssistantAnswer, ReadingQuoteLocation {
   id: number;
   chapterIndex: number;
   question: string;
@@ -118,6 +119,8 @@ export const askReadingAssistant = async (
     chapterIndex: number;
     question: string;
     selectedText?: string;
+    quoteCfi?: string;
+    bookFingerprint?: string;
     conversationId?: string;
     mode?: ReadingAnswerMode;
   },

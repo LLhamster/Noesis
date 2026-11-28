@@ -3,6 +3,12 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useNotebookStore } from '@/store/notebookStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useReaderStore } from '@/store/readerStore';
+import { useBookDataStore } from '@/store/bookDataStore';
+import {
+  captureReadingQuote,
+  navigateReadingPosition,
+  openReadingQuote,
+} from '@/services/readingAssistant/quoteNavigation';
 import {
   askReadingAssistant,
   createReadingConversation,
@@ -13,6 +19,7 @@ import {
   stopReadingAnswer,
   type ReadingConversation,
   type ReadingConversationPage,
+  type ReadingConversationTurn,
 } from '@/services/readingAssistant/ai';
 import {
   getReadingAssistantSession,
@@ -38,6 +45,10 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
   );
   const isNotebookPinned = useNotebookStore((state) => state.isNotebookPinned);
   const clearQuestionContext = useNotebookStore((state) => state.clearNotebookQuestionContext);
+  const getBookData = useBookDataStore((state) => state.getBookData);
+  const [quoteNavigationBusy, setQuoteNavigationBusy] = useState(false);
+  const [quoteNotice, setQuoteNotice] = useState('');
+  const [returnPosition, setReturnPosition] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
   const [mode, setMode] = useState(getReadingAnswerMode);
   const [selectedText, setSelectedText] = useState(() => getReadingAssistantSelection(bookKey));
@@ -284,6 +295,43 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
     }
   };
 
+  const openQuote = async (turn: ReadingConversationTurn) => {
+    if (quoteNavigationBusy) return;
+    const view = getView(bookKey);
+    const origin = view?.lastLocation?.cfi ?? progress?.location;
+    setQuoteNavigationBusy(true);
+    setQuoteNotice('');
+    try {
+      const result = await openReadingQuote(view, turn, getBookData(bookKey)?.book?.hash);
+      if (result === 'unavailable') {
+        if (view && origin) await navigateReadingPosition(view, origin).catch(() => {});
+        setQuoteNotice(_('Could not open the quoted passage. The saved text is still available.'));
+        return;
+      }
+      setReturnPosition(origin ?? null);
+      if (result === 'chapter') {
+        setQuoteNotice(_('Opened the chapter. The exact passage could not be located.'));
+      }
+    } finally {
+      setQuoteNavigationBusy(false);
+    }
+  };
+
+  const returnToReading = async () => {
+    const view = getView(bookKey);
+    if (!view || !returnPosition || quoteNavigationBusy) return;
+    setQuoteNavigationBusy(true);
+    try {
+      await navigateReadingPosition(view, returnPosition);
+      setReturnPosition(null);
+      setQuoteNotice('');
+    } catch {
+      setQuoteNotice(_('Could not return to the previous reading position.'));
+    } finally {
+      setQuoteNavigationBusy(false);
+    }
+  };
+
   const submit = async () => {
     if (!question.trim() || !conversationId || loadingHistory || pendingRequest.current) return;
     const id = conversationId;
@@ -293,8 +341,18 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
     setGeneration({ requestId, conversationId: id, stage: 'connecting', answer: '' });
     setError('');
     try {
-      const passage = questionContext?.text ?? (isNotebookPinned ? '' : getLiveSelection());
-      const chapterIndex = questionContext?.chapterIndex ?? Math.max(1, (progress?.index ?? 0) + 1);
+      const liveQuote =
+        !questionContext && !isNotebookPinned ? captureReadingQuote(getView(bookKey)) : null;
+      const passage =
+        questionContext?.text ?? liveQuote?.text ?? (isNotebookPinned ? '' : getLiveSelection());
+      const chapterIndex =
+        questionContext?.chapterIndex ??
+        liveQuote?.chapterIndex ??
+        Math.max(1, (progress?.index ?? 0) + 1);
+      const quoteCfi = questionContext ? questionContext.quoteCfi : liveQuote?.quoteCfi;
+      const bookFingerprint = passage
+        ? (questionContext?.bookFingerprint ?? getBookData(bookKey)?.book?.hash)
+        : undefined;
       const result = await askReadingAssistant(
         {
           conversationId: id,
@@ -303,6 +361,8 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
           chapterIndex,
           question: submittedQuestion,
           selectedText: passage || undefined,
+          quoteCfi,
+          bookFingerprint,
         },
         {
           id: requestId,
@@ -337,6 +397,8 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
                   chapterIndex,
                   question: submittedQuestion,
                   selectedText: passage || null,
+                  quoteCfi,
+                  bookFingerprint,
                   answer: result.answer,
                   sources: result.sources,
                   status: result.status ?? 'completed',
@@ -436,13 +498,38 @@ const ReadingAssistantChat = ({ bookKey, bookId }: { bookKey: string; bookId: nu
           {_('Load earlier messages')}
         </button>
       )}
+      {returnPosition && (
+        <button
+          type='button'
+          className='btn btn-sm eink-bordered'
+          disabled={quoteNavigationBusy}
+          onClick={() => void returnToReading()}
+        >
+          {_('Return to reading position')}
+        </button>
+      )}
+      {quoteNotice && (
+        <p role='status' className='text-sm'>
+          {quoteNotice}
+        </p>
+      )}
       {history.turns.map((turn) => (
         <article
           key={turn.id}
           className='border-base-200 space-y-2 whitespace-pre-wrap border-b pb-2 text-sm'
         >
           {turn.selectedText && (
-            <blockquote className='border-base-300 border-s-2 ps-3'>{turn.selectedText}</blockquote>
+            <blockquote className='border-base-300 border-s-2 ps-3'>
+              <p>{turn.selectedText}</p>
+              <button
+                type='button'
+                className='btn btn-sm eink-bordered mt-2'
+                disabled={quoteNavigationBusy}
+                onClick={() => void openQuote(turn)}
+              >
+                {_('Open quoted passage')}
+              </button>
+            </blockquote>
           )}
           <p className='font-medium'>{turn.question}</p>
           {turn.mode === 'quick' && <p className='text-base-content/70'>{_('Quick')}</p>}

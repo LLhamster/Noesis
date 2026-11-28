@@ -2,15 +2,37 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const goToMock = vi.fn();
+const navigateMock = vi.fn();
+let renderedIndex = 1;
+const chapterDocument = document.implementation.createHTMLDocument();
 
 vi.mock('@/hooks/useTranslation', () => ({ useTranslation: () => (text: string) => text }));
 vi.mock('@/store/readerProgressStore', () => ({
   useBookProgress: () => ({ index: 1, location: 'epubcfi(/6/4!/4/2:0)' }),
 }));
 vi.mock('@/store/readerStore', () => ({
-  useReaderStore: (
-    selector: (state: { getView: () => { goTo: typeof goToMock } | null }) => unknown,
-  ) => selector({ getView: () => ({ goTo: goToMock }) }),
+  useReaderStore: (selector: (state: { getView: () => unknown }) => unknown) =>
+    selector({
+      getView: () => ({
+        goTo: goToMock,
+        resolveNavigation: (target: string | number) => ({
+          index: typeof target === 'number' ? target : 1,
+        }),
+        book: {
+          sections: Array.from({ length: 5 }, () => ({
+            createDocument: async () => chapterDocument,
+          })),
+        },
+        renderer: {
+          goTo: navigateMock,
+          getContents: () => [{ index: renderedIndex, doc: chapterDocument }],
+        },
+      }),
+    }),
+}));
+vi.mock('@/store/bookDataStore', () => ({
+  useBookDataStore: (selector: (state: { getBookData: () => unknown }) => unknown) =>
+    selector({ getBookData: () => ({ book: { hash: 'local-version' } }) }),
 }));
 vi.mock('@/services/readingAssistant/selection', () => ({
   getReadingAssistantSelection: () => 'selected passage',
@@ -72,6 +94,10 @@ import {
 describe('Reading Assistant reader panel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    renderedIndex = 1;
+    navigateMock.mockImplementation(async ({ index }: { index: number }) => {
+      renderedIndex = index;
+    });
     localStorage.removeItem('reading-assistant-answer-mode');
     vi.mocked(listReadingConversations).mockResolvedValue([
       { id: 'default', title: null, defaultConversation: true },
@@ -106,6 +132,8 @@ describe('Reading Assistant reader panel', () => {
           chapterIndex: 2,
           question: 'What does this mean?',
           selectedText: 'selected passage',
+          quoteCfi: undefined,
+          bookFingerprint: 'local-version',
         },
         expect.any(Object),
       ),
@@ -120,6 +148,8 @@ describe('Reading Assistant reader panel', () => {
         bookKey: 'local-book',
         text: 'passage from toolbar',
         chapterIndex: 4,
+        quoteCfi: 'epubcfi(/6/8!/4/2:0)',
+        bookFingerprint: 'original-version',
       });
       vi.mocked(askReadingAssistant).mockResolvedValue({
         answer: 'Answer',
@@ -145,6 +175,8 @@ describe('Reading Assistant reader panel', () => {
             chapterIndex: 4,
             question: 'Explain this',
             selectedText: 'passage from toolbar',
+            quoteCfi: 'epubcfi(/6/8!/4/2:0)',
+            bookFingerprint: 'original-version',
           },
           expect.any(Object),
         ),
@@ -152,6 +184,58 @@ describe('Reading Assistant reader panel', () => {
     } finally {
       useNotebookStore.getState().setNotebookVisible(false);
     }
+  });
+
+  it('opens a historical quote and returns to the previous reading position', async () => {
+    vi.mocked(getReadingConversation).mockResolvedValueOnce({
+      before: null,
+      turns: [
+        {
+          id: 31,
+          chapterIndex: 3,
+          question: 'Earlier question',
+          selectedText: 'Saved quote',
+          answer: 'Earlier answer',
+          sources: [],
+          status: 'completed',
+        },
+      ],
+    });
+    render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open quoted passage' }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ index: 2 }));
+    expect(
+      screen.getByText('Opened the chapter. The exact passage could not be located.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Return to reading position' }));
+    await waitFor(() => expect(navigateMock).toHaveBeenLastCalledWith({ index: 1 }));
+  });
+
+  it('keeps the saved quote visible and reports a missing chapter without offering a return jump', async () => {
+    vi.mocked(getReadingConversation).mockResolvedValueOnce({
+      before: null,
+      turns: [
+        {
+          id: 32,
+          chapterIndex: 99,
+          question: 'Earlier question',
+          selectedText: 'Unavailable quote',
+          answer: 'Earlier answer',
+          sources: [],
+          status: 'completed',
+        },
+      ],
+    });
+    render(<ReadingAssistantChat bookKey='local-book' bookId={22} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open quoted passage' }));
+    expect(
+      await screen.findByText(
+        'Could not open the quoted passage. The saved text is still available.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Unavailable quote')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Return to reading position' })).toBeNull();
+    expect(navigateMock).not.toHaveBeenCalledWith({ index: 98 });
   });
 
   it('restores the latest conversation and can create and switch conversations', async () => {

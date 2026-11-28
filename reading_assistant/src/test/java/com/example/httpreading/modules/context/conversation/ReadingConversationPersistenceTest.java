@@ -89,6 +89,30 @@ class ReadingConversationPersistenceTest {
         assertEquals("", service.recentDialogue(42L, book, conversation));
     }
 
+    @Test
+    void quoteLocationSurvivesStreamingAndSynchronousHistoryReloads() throws Exception {
+        Long book = createBook();
+        String conversation = service.list(42L, book).get(0).id();
+        var mapper = new ObjectMapper().configure(
+            com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        var request = mapper.readValue("""
+            {"chapterIndex":3,"question":"定位问题","selectedText":"原文快照",
+             "quoteCfi":"epubcfi(/6/6!/4/2:0)","bookFingerprint":"file-version"}
+            """, AiChatRequest.class);
+        request.setBookId(book);
+        request.setConversationId(conversation);
+        service.saveTurn(42L, request, new AiChatResponse("回答", List.of()));
+        service.startStream(42L, request, java.util.UUID.randomUUID().toString());
+        var history = service.open(42L, book, conversation, null);
+        assertEquals(2, history.turns().size());
+        for (var turn : history.turns()) {
+            var saved = mapper.valueToTree(turn);
+            assertEquals("epubcfi(/6/6!/4/2:0)", saved.path("quoteCfi").asText());
+            assertEquals("file-version", saved.path("bookFingerprint").asText());
+            assertEquals("原文快照", turn.selectedText());
+        }
+    }
+
     private String listAfter(CountDownLatch start, Long book) {
         try {
             if (!start.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("Timed out");
